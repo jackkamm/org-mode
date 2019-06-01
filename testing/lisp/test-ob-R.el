@@ -31,6 +31,30 @@
      "#+begin_src R :session R\n  paste(\"Yep!\")\n#+end_src\n"
      (should (string= "Yep!" (org-babel-execute-src-block))))))
 
+(ert-deftest test-ob-R/simple-session-async-value ()
+  (let (ess-ask-for-ess-directory ess-history-file)
+    (org-test-with-temp-text
+     "#+begin_src R :session R :async yes\n  Sys.sleep(.1)\n  paste(\"Yep!\")\n#+end_src\n"
+     (should (let ((expected "Yep!"))
+	       (and (not (string= expected (org-babel-execute-src-block)))
+		    (string= expected
+			     (progn
+			       (sleep-for 0 200)
+			       (goto-char (org-babel-where-is-src-block-result))
+			       (org-babel-read-result)))))))))
+
+(ert-deftest test-ob-R/simple-session-async-output ()
+  (let (ess-ask-for-ess-directory ess-history-file)
+    (org-test-with-temp-text
+     "#+begin_src R :session R :results output :async yes\n  Sys.sleep(.1)\n  1:5\n#+end_src\n"
+     (should (let ((expected "[1] 1 2 3 4 5"))
+	       (and (not (string= expected (org-babel-execute-src-block)))
+		    (string= expected
+			     (progn
+			       (sleep-for 0 200)
+			       (goto-char (org-babel-where-is-src-block-result))
+			       (org-babel-read-result)))))))))
+
 (ert-deftest test-ob-R/colnames-yes-header-argument ()
   (org-test-with-temp-text "#+name: eg
 | col |
