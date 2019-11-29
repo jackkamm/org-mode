@@ -16754,13 +16754,20 @@ buffer boundaries with possible narrowing."
 			    (t nil)))
 			  (old (get-char-property-and-overlay
 				(org-element-property :begin link)
-				'org-image-overlay)))
+				'org-image-overlay))
+			  (remote-p (file-remote-p file)))
 		      (if (and (car-safe old) refresh)
 			  (image-refresh (overlay-get (cdr old) 'display))
-			(let ((image (create-image file
+			(let ((image (create-image (if (not remote-p)
+						       file
+						     (with-temp-buffer
+						       (insert-file-contents file)
+						       (string-make-unibyte
+							(buffer-substring-no-properties
+							 (point-min) (point-max)))))
 						   (and (image-type-available-p 'imagemagick)
 							width 'imagemagick)
-						   nil
+						   remote-p
 						   :width width)))
 			  (when image
 			    (let ((ov (make-overlay
