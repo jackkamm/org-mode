@@ -16760,11 +16760,12 @@ buffer boundaries with possible narrowing."
 			  (image-refresh (overlay-get (cdr old) 'display))
 			(let ((image (create-image (if (not remote-p)
 						       file
-						     (with-temp-buffer
-						       (insert-file-contents file)
-						       (string-make-unibyte
-							(buffer-substring-no-properties
-							 (point-min) (point-max)))))
+						     (let ((revert-without-query '(".*")))
+						       (with-current-buffer
+							   (find-file-noselect file)
+							 (string-make-unibyte
+							  (buffer-substring-no-properties
+							   (point-min) (point-max))))))
 						   (and (image-type-available-p 'imagemagick)
 							width 'imagemagick)
 						   remote-p
