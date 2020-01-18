@@ -144,26 +144,24 @@ the existing edit buffer."
   :package-version '(Org . "8.0")
   :type 'boolean)
 
-(defcustom org-src-window-setup 'reorganize-frame
+(defcustom org-src-window-setup 'default
   "How the source code edit buffer should be displayed.
 Possible values for this option are:
 
+default            Use default `display-buffer' action.
 current-window     Show edit buffer in the current window, keeping all other
                    windows.
 split-window-below Show edit buffer below the current window, keeping all
                    other windows.
 split-window-right Show edit buffer to the right of the current window,
                    keeping all other windows.
-other-window       Use `switch-to-buffer-other-window' to display edit buffer.
+other-window       Use some other window to display edit buffer.
 reorganize-frame   Show only two windows on the current frame, the current
-                   window and the edit buffer.
-other-frame        Use `switch-to-buffer-other-frame' to display edit buffer.
-                   Also, when exiting the edit buffer, kill that frame.
-
-Values that modify the window layout (reorganize-frame, split-window-below,
-split-window-right) will restore the layout after exiting the edit buffer."
+                   window and the edit buffer. Restore windows after exiting.
+other-frame        Use some other frame to display edit buffer."
   :group 'org-edit-structure
   :type '(choice
+	  (const default)
 	  (const current-window)
 	  (const split-window-below)
 	  (const split-window-right)
@@ -474,9 +472,7 @@ When REMOTE is non-nil, do not try to preserve point or mark when
 moving from the edit area to the source.
 
 Leave point in edit buffer."
-  (when (memq org-src-window-setup '(reorganize-frame
-				     split-window-below
-				     split-window-right))
+  (when (eql org-src-window-setup 'reorganize-frame)
     (setq org-src--saved-temp-window-config (current-window-configuration)))
   (let* ((area (org-src--contents-area datum))
 	 (beg (copy-marker (nth 0 area)))
@@ -801,34 +797,35 @@ Raise an error when current buffer is not a source editing buffer."
 
 (defun org-src-switch-to-buffer (buffer context)
   (pcase org-src-window-setup
+    (`default (pop-to-buffer buffer))
     (`current-window (pop-to-buffer-same-window buffer))
     (`other-window
-     (switch-to-buffer-other-window buffer))
+     (pop-to-buffer buffer '(nil
+			     ((reusable-frames . nil)
+			      (inhibit-same-window . t)))))
     (`split-window-below
-     (if (eq context 'exit)
-	 (delete-window)
-       (select-window (split-window-vertically)))
-     (pop-to-buffer-same-window buffer))
+     (let ((split-width-threshold)
+	   (split-height-threshold 0))
+       (pop-to-buffer buffer '((display-buffer-reuse-window
+				display-buffer-pop-up-window)
+			       ((reusable-frames . nil)
+				(inhibit-same-window . t))))))
     (`split-window-right
-     (if (eq context 'exit)
-	 (delete-window)
-       (select-window (split-window-horizontally)))
-     (pop-to-buffer-same-window buffer))
+     (let ((split-width-threshold 0)
+	   (split-height-threshold))
+       (pop-to-buffer buffer '((display-buffer-reuse-window
+				display-buffer-pop-up-window)
+			       ((reusable-frames . nil)
+				(inhibit-same-window . t))))))
     (`other-frame
-     (pcase context
-       (`exit
-	(let ((frame (selected-frame)))
-	  (switch-to-buffer-other-frame buffer)
-	  (delete-frame frame)))
-       (`save
-	(kill-buffer (current-buffer))
-	(pop-to-buffer-same-window buffer))
-       (_ (switch-to-buffer-other-frame buffer))))
+     (pop-to-buffer buffer '((display-buffer-reuse-window
+			      display-buffer-pop-up-frame)
+			     ((reusable-frames . 0)
+			      (inhibit-same-window . t)))))
     (`reorganize-frame
      (when (eq context 'edit) (delete-other-windows))
-     (org-switch-to-buffer-other-window buffer)
-     (when (eq context 'exit) (delete-other-windows)))
-    (`switch-invisibly (set-buffer buffer))
+     (org-switch-to-buffer-other-window buffer))
+    (`switch-invisibly (pop-to-buffer buffer '(display-buffer-no-window)))
     (_
      (message "Invalid value %s for `org-src-window-setup'"
 	      org-src-window-setup)
@@ -1167,8 +1164,8 @@ Throw an error if there is no such buffer."
     (let ((edit-buffer (current-buffer))
 	  (source-buffer (marker-buffer beg)))
       (unless source-buffer (error "Source buffer disappeared.  Aborting"))
-      (org-src-switch-to-buffer source-buffer 'exit)
-      (kill-buffer edit-buffer))
+      (quit-restore-window nil 'kill)
+      (pop-to-buffer source-buffer))
     ;; Insert modified code.  Ensure it ends with a newline character.
     (org-with-wide-buffer
      (when (and write-back (not (equal (buffer-substring beg end) code)))

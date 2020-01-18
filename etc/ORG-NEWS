@@ -30,10 +30,18 @@ group new datetime entries by month.
 Babel Java blocks recognize header argument =:cmdargs= and pass its
 value in call to =java=.
 
-*** Refinement in window behavior on exiting Org source buffer
+*** Improved window behavior for Org source buffer
 
-After editing a source block, Org will restore the window layout when
-~org-src-window-setup~ is set to a value that modifies the layout.
+More consistently use the ~display-buffer~ framework for popping up
+source buffers.
+
+Added an option ~default~ to ~org-src-window-setup~, that respects the
+user's default configuration of ~display-buffer~ to pop up
+buffers. This is the new default value for ~org-src-window-setup~.
+
+The option ~reorganize-frame~ was also reverted to the previous
+behavior of restoring the window configuration after exiting the
+source buffer.
 
 ** New functions
 *** ~org-columns-toggle-or-columns-quit~
