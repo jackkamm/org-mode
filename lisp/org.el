@@ -16739,6 +16739,53 @@ INCLUDE-LINKED is passed to `org-display-inline-images'."
 ;; For without-x builds.
 (declare-function image-refresh "image" (spec &optional frame))
 
+(defcustom org-display-remote-inline-images 'skip-warn
+  "How to display remote inline images.
+Possible values of this option are:
+
+skip-warn         Don't display, and emit a message about it.
+skip-silent       Don't display, and don't warn about it.
+download-always   Always download and display remote images.
+cache-in-buffer   Display remote images, and open them in separate buffers for
+                  cache'ing.  Silently update the image buffer when a file
+                  change is detected."
+  :type '(choice
+	  (const skip-warn)
+	  (const skip-silent)
+	  (const download-always)
+	  (const cache-in-buffers))
+  :group 'org-appearance)
+
+(defun org-inline-image--buffer-unibyte ()
+  (string-make-unibyte (buffer-substring-no-properties
+			(point-min) (point-max))))
+
+(defun org-inline-image--create (file width)
+  (let* ((remote-p (file-remote-p file))
+	 (file-or-data
+	  (if remote-p
+	      (pcase org-display-remote-inline-images
+		(`download-always (with-temp-buffer (insert-file-contents file)
+						    (org-inline-image--buffer-unibyte)))
+		(`cache-in-buffers (let ((revert-without-query '(".*")))
+				     (with-current-buffer
+					 (find-file-noselect file)
+				       (org-inline-image--buffer-unibyte))))
+		(`skip-warn (message
+			     (concat "Set `org-display-remote-inline-images'"
+				     " to display remote images."))
+			    nil)
+		(`skip-silent nil)
+		(_ (message (concat "Invalid value of "
+				    "`org-display-remote-inline-images'"))
+		   nil))
+	    file)))
+    (when file-or-data
+      (create-image file-or-data
+		    (and (image-type-available-p 'imagemagick)
+			 width 'imagemagick)
+		    remote-p :width width))))
+
 (defun org-display-inline-images (&optional include-linked refresh beg end)
   "Display inline images.
 
@@ -16857,11 +16904,7 @@ buffer boundaries with possible narrowing."
 				'org-image-overlay)))
 		      (if (and (car-safe old) refresh)
 			  (image-refresh (overlay-get (cdr old) 'display))
-			(let ((image (create-image file
-						   (and (image-type-available-p 'imagemagick)
-							width 'imagemagick)
-						   nil
-						   :width width)))
+			(let ((image (org-inline-image--create file width)))
 			  (when image
 			    (let ((ov (make-overlay
 				       (org-element-property :begin link)
