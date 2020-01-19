@@ -16739,6 +16739,45 @@ INCLUDE-LINKED is passed to `org-display-inline-images'."
 ;; For without-x builds.
 (declare-function image-refresh "image" (spec &optional frame))
 
+(defcustom org-display-remote-inline-images 'skip
+  "How to display remote inline images.
+Possible values of this option are:
+
+skip              Don't display remote images.
+download-always   Always download and display remote images.
+cache-buffer      Display remote images, and open them in separate buffers for
+                  cacheing.  Silently update the image buffer when a file
+                  change is detected."
+  :group 'org-appearance
+  :package-version '(Org . "9.4")
+  :type '(choice
+	  (const skip)
+	  (const download-always)
+	  (const cache-buffer))
+  :safe #'symbolp)
+
+(defun org--create-inline-image (file width)
+  (let* ((remote-p (file-remote-p file))
+	 (file-or-data
+	  (pcase org-display-remote-inline-images
+	    ((guard (not remote-p)) file)
+	    (`download-always (with-temp-buffer
+				(insert-file-contents-literally file)
+				(string-make-unibyte
+				 (buffer-string))))
+	    (`cache-buffer (let ((revert-without-query '(".*")))
+			     (with-current-buffer
+				 (find-file-noselect file)
+			       (buffer-string))))
+	    (`skip nil)
+	    (_ (message "Invalid value of `org-display-remote-inline-images'")
+	       nil))))
+    (when file-or-data
+      (create-image file-or-data
+		    (and (image-type-available-p 'imagemagick)
+			 width 'imagemagick)
+		    remote-p :width width))))
+
 (defun org-display-inline-images (&optional include-linked refresh beg end)
   "Display inline images.
 
@@ -16857,11 +16896,7 @@ buffer boundaries with possible narrowing."
 				'org-image-overlay)))
 		      (if (and (car-safe old) refresh)
 			  (image-refresh (overlay-get (cdr old) 'display))
-			(let ((image (create-image file
-						   (and (image-type-available-p 'imagemagick)
-							width 'imagemagick)
-						   nil
-						   :width width)))
+			(let ((image (org--create-inline-image file width)))
 			  (when image
 			    (let ((ov (make-overlay
 				       (org-element-property :begin link)
