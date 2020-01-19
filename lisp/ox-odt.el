@@ -1,6 +1,6 @@
 ;;; ox-odt.el --- OpenDocument Text Exporter for Org Mode -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2010-2019 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2020 Free Software Foundation, Inc.
 
 ;; Author: Jambunathan K <kjambunathan at gmail dot com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -31,6 +31,8 @@
 (require 'org-macs)
 (require 'ox)
 (require 'table nil 'noerror)
+
+;;; Function Declarations
 
 ;;; Define Back-End
 
@@ -741,7 +743,8 @@ link's path."
 		:value-type (regexp :tag "Path")))
 
 (defcustom org-odt-inline-image-rules
-  '(("file" . "\\.\\(jpeg\\|jpg\\|png\\|gif\\|svg\\)\\'"))
+  `(("file" . ,(regexp-opt '(".jpeg" ".jpg" ".png" ".gif" ".svg")))
+    ("attachment" . ,(regexp-opt '(".jpeg" ".jpg" ".png" ".gif" ".svg"))))
   "Rules characterizing image files that can be inlined into ODT.
 
 A rule consists in an association whose key is the type of link
@@ -1383,6 +1386,8 @@ original parsed data.  INFO is a plist holding export options."
 
     ;; create a manifest entry for styles.xml
     (org-odt-create-manifest-file-entry "text/xml" "styles.xml")
+    ;; Ensure we have write permissions to this file.
+    (set-file-modes (concat org-odt-zip-dir "styles.xml") #o600)
 
     ;; FIXME: Who is opening an empty styles.xml before this point?
     (with-current-buffer
@@ -2699,7 +2704,10 @@ INFO is a plist holding contextual information.  See
 	 (path (cond
 		((member type '("http" "https" "ftp" "mailto"))
 		 (concat type ":" raw-path))
-		((string= type "file") (org-export-file-uri raw-path))
+		((member type '("file" "attachment"))
+		 (when (string= type "attachment")
+		   (setq raw-path (org-element-property :attachment-path link)))
+		 (org-export-file-uri raw-path))
 		(t raw-path)))
 	 ;; Convert & to &amp; for correct XML representation
 	 (path (replace-regexp-in-string "&" "&amp;" path)))

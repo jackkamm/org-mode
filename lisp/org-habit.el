@@ -1,6 +1,6 @@
 ;;; org-habit.el --- The habit tracking code for Org -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2019 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2020 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw at gnu dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -409,7 +409,7 @@ current time."
 			   'help-echo
 			   (concat (format-time-string
 				    (org-time-stamp-format)
- 				    (time-add starting (days-to-time (- start (time-to-days starting)))))
+				    (time-add starting (days-to-time (- start (time-to-days starting)))))
 				   (if donep " DONE" ""))
 			   graph))
       (setq start (1+ start)

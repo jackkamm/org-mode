@@ -1,22 +1,24 @@
 ;;; ol.el --- Org links library                      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2018  Free Software Foundation, Inc.
+;; Copyright (C) 2018-2020 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
 
-;; This program is free software; you can redistribute it and/or modify
+;; This file is part of GNU Emacs.
+
+;; GNU Emacs is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -714,12 +716,10 @@ This should be called after the variable `org-link-parameters' has changed."
 	  (rx (seq "[["
 		   ;; URI part: match group 1.
 		   (group
-		    ;; Allow an even number of backslashes right
-		    ;; before the closing bracket.
-		    (or (one-or-more "\\\\")
-			(and (*? anything)
-			     (not (any "\\"))
-			     (zero-or-more "\\\\"))))
+		    (one-or-more
+                     (or (not (any "[]\\"))
+			 (and "\\" (zero-or-more "\\\\") (any "[]"))
+			 (and (one-or-more "\\") (not (any "[]"))))))
 		   "]"
 		   ;; Description (optional): match group 2.
 		   (opt "[" (group (+? anything)) "]")
@@ -836,30 +836,21 @@ E.g. \"%C3%B6\" becomes the german o-Umlaut."
 
 (defun org-link-escape (link)
   "Backslash-escape sensitive characters in string LINK."
-  ;; Escape closing square brackets followed by another square bracket
-  ;; or at the end of the link.  Also escape final backslashes so that
-  ;; we do not escape inadvertently URI's closing bracket.
-  (with-temp-buffer
-    (insert link)
-    (insert (make-string (- (skip-chars-backward "\\\\"))
-			 ?\\))
-    (while (search-backward "\]" nil t)
-      (when (looking-at-p "\\]\\(?:[][]\\|\\'\\)")
-	(insert (make-string (1+ (- (skip-chars-backward "\\\\")))
-			     ?\\))))
-    (buffer-string)))
+  (replace-regexp-in-string
+   (rx (seq (group (zero-or-more "\\")) (group (or string-end (any "[]")))))
+   (lambda (m)
+     (concat (match-string 1 m)
+	     (match-string 1 m)
+	     (and (/= (match-beginning 2) (match-end 2)) "\\")))
+   link nil t 1))
 
 (defun org-link-unescape (link)
   "Remove escaping backslash characters from string LINK."
-  (with-temp-buffer
-    (save-excursion (insert link))
-    (while (re-search-forward "\\(\\\\+\\)\\]\\(?:[][]\\|\\'\\)" nil t)
-      (replace-match (make-string (/ (- (match-end 1) (match-beginning 1)) 2)
-				  ?\\)
-		     nil t nil 1))
-    (goto-char (point-max))
-    (delete-char (/ (- (skip-chars-backward "\\\\")) 2))
-    (buffer-string)))
+  (replace-regexp-in-string
+   (rx (group (one-or-more "\\")) (or string-end (any "[]")))
+   (lambda (_)
+     (concat (make-string (/ (- (match-end 1) (match-beginning 1)) 2) ?\\)))
+   link nil t 1))
 
 (defun org-link-make-string (link &optional description)
   "Make a bracket link, consisting of LINK and DESCRIPTION.
@@ -941,7 +932,9 @@ a \"file\" link."
   (let ((type (org-element-property :type link))
 	(path (org-element-property :path link)))
     (cond
-     ((equal type "file")
+     ((member type '("file" "attachment"))
+      (when (string= type "attachment")
+	(setq path (org-element-property :attachment-path link)))
       (if (string-match "[*?{]" (file-name-nondirectory path))
 	  (dired path)
 	;; Look into `org-link-parameters' in order to find
@@ -1587,15 +1580,17 @@ non-nil."
       (cond ((not desc))
 	    ((equal desc "NONE") (setq desc nil))
 	    (t (setq desc (org-link-display-format desc))))
-      ;; Return the link
+      ;; Store and return the link
       (if (not (and interactive? link))
 	  (or agenda-link (and link (org-link-make-string link desc)))
-	(push (list link desc) org-stored-links)
-	(message "Stored: %s" (or desc link))
-	(when custom-id
-	  (setq link (concat "file:" (abbreviate-file-name
-				      (buffer-file-name)) "::#" custom-id))
-	  (push (list link desc) org-stored-links))
+	(if (member (list link desc) org-stored-links)
+	    (message "This link already exists")
+	  (push (list link desc) org-stored-links)
+	  (message "Stored: %s" (or desc link))
+	  (when custom-id
+	    (setq link (concat "file:" (abbreviate-file-name
+					(buffer-file-name)) "::#" custom-id))
+	    (push (list link desc) org-stored-links)))
 	(car org-stored-links)))))
 
 ;;;###autoload

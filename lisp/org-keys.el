@@ -1,21 +1,23 @@
 ;;; org-keys.el --- Key bindings for Org mode        -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2018 Free Software Foundation, Inc.
+;; Copyright (C) 2018-2020 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <mail@nicolasgoaziou.fr>
 
-;; This program is free software; you can redistribute it and/or modify
+;; This file is part of GNU Emacs.
+
+;; GNU Emacs is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -24,6 +26,8 @@
 ;; details.
 
 ;;; Code:
+
+(require 'cl-lib)
 
 (defvar org-outline-regexp)
 
@@ -216,6 +220,8 @@
 (defvar org-mode-map (make-sparse-keymap)
   "Keymap fo Org mode.")
 
+(defvaralias 'org-CUA-compatible 'org-replace-disputed-keys)
+
 (defcustom org-replace-disputed-keys nil
   "Non-nil means use alternative key bindings for some keys.
 
@@ -241,8 +247,6 @@ loading Org."
   :group 'org-startup
   :type 'boolean
   :safe #'booleanp)
-
-(defvaralias 'org-CUA-compatible 'org-replace-disputed-keys)
 
 (defcustom org-disputed-keys
   '(([(shift up)]		. [(meta p)])
@@ -441,10 +445,12 @@ COMMANDS is a list of alternating OLDDEF NEWDEF command names."
 (org-defkey org-mode-map (kbd "C-i") #'org-cycle)
 (org-defkey org-mode-map (kbd "<tab>") #'org-cycle)
 (org-defkey org-mode-map (kbd "C-<tab>") #'org-force-cycle-archived)
-(org-defkey org-mode-map (kbd "M-<tab>") #'pcomplete)
-(org-defkey org-mode-map (kbd "M-TAB") #'pcomplete)
-(org-defkey org-mode-map (kbd "ESC <tab>") #'pcomplete)
-(org-defkey org-mode-map (kbd "ESC TAB") #'pcomplete)
+;; Override text-mode binding to expose `complete-symbol' for
+;; pcomplete functionality.
+(org-defkey org-mode-map (kbd "M-<tab>") nil)
+(org-defkey org-mode-map (kbd "M-TAB") nil)
+(org-defkey org-mode-map (kbd "ESC <tab>") nil)
+(org-defkey org-mode-map (kbd "ESC TAB") nil)
 
 (org-defkey org-mode-map (kbd "<S-iso-leftab>") #'org-shifttab)
 (org-defkey org-mode-map (kbd "S-<tab>") #'org-shifttab)

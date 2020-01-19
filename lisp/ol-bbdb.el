@@ -1,6 +1,6 @@
 ;;; ol-bbdb.el --- Links to BBDB entries             -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2019 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2020 Free Software Foundation, Inc.
 
 ;; Authors: Carsten Dominik <carsten at orgmode dot org>
 ;;       Thomas Baumann <thomas dot baumann at ch dot tum dot de>
@@ -162,13 +162,13 @@ used."
   '(("birthday" .
      (lambda (name years suffix)
        (concat "Birthday: [[bbdb:" name "][" name " ("
-    	       (format "%s" years)        ; handles numbers as well as strings
-    	       suffix ")]]")))
+	       (format "%s" years)        ; handles numbers as well as strings
+	       suffix ")]]")))
     ("wedding" .
      (lambda (name years suffix)
        (concat "[[bbdb:" name "][" name "'s "
-    	       (format "%s" years)
-    	       suffix " wedding anniversary]]"))))
+	       (format "%s" years)
+	       suffix " wedding anniversary]]"))))
   "How different types of anniversaries should be formatted.
 An alist of elements (STRING . FORMAT) where STRING is the name of an
 anniversary class and format is either:

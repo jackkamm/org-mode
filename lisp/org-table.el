@@ -1,6 +1,6 @@
 ;;; org-table.el --- The Table Editor for Org        -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2004-2019 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2020 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -1709,7 +1709,7 @@ The function assumes `org-table-copy-increment' is non-nil."
 	 (number-suffix-regexp (rx (and (one-or-more digit) string-end)))
 	 (analyze
 	  (lambda (field)
-	    ;; Analyse string FIELD and return information related to
+	    ;; Analyze string FIELD and return information related to
 	    ;; increment or nil.  When non-nil, return value has the
 	    ;; following scheme: (TYPE VALUE PATTERN) where
 	    ;; - TYPE is a symbol among `number', `prefix', `suffix'
@@ -4642,7 +4642,7 @@ blank, and the content is appended to the field above."
 	(skip-chars-backward " ")
 	(insert " " (org-trim s))
 	(org-table-align)))
-     ((looking-at "\\([^|]+\\)+|")	; Split field.
+     ((looking-at "\\([^|]+\\)|")	; Split field.
       (let ((s (match-string 1)))
 	(replace-match " |")
 	(goto-char (match-beginning 0))

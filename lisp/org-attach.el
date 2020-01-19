@@ -1,6 +1,6 @@
 ;;; org-attach.el --- Manage file attachments to Org outlines -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2008-2019 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2020 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@newartisans.com>
 ;; Keywords: org data attachment
@@ -187,7 +187,7 @@ attachment folders based on ID."
   "Hook that is invoked by `org-attach-open'.
 
 Created mostly to be compatible with org-attach-git after removing
-git-funtionality from this file.")
+git-functionality from this file.")
 
 (defcustom org-attach-commands
   '(((?a ?\C-a) org-attach-attach
@@ -231,7 +231,7 @@ directory in dired and delete from there.\n")
 Each entry in this list is a list of three elements:
 - A list of keys (characters) to select the command (the fist
   character in the list is shown in the attachment dispatcher's
-  splash buffer and minubuffer prompt).
+  splash buffer and minibuffer prompt).
 - A command that is called interactively when one of these keys
   is pressed.
 - A docstring for this command in the attachment dispatcher's
@@ -254,11 +254,8 @@ Shows a list of commands and prompts for another key to execute a command."
 		       (get-text-property (point) 'org-marker)))
       (unless marker
 	(error "No item in current line")))
-    (save-excursion
-      (when marker
-	(set-buffer (marker-buffer marker))
-	(goto-char marker))
-      (org-back-to-heading t)
+    (org-with-point-at marker
+      (org-back-to-heading-or-point-min t)
       (save-excursion
 	(save-window-excursion
 	  (unless org-attach-expert
@@ -457,14 +454,6 @@ DIR-property exists (that is different than the unset one)."
   "Turn the autotag off."
   (org-attach-tag 'off))
 
-(defun org-attach-store-link (file)
-  "Add a link to `org-stored-link' when attaching a file.
-Only do this when `org-attach-store-link-p' is non-nil."
-  (setq org-stored-links
-	(cons (list (org-attach-expand-link file)
-		    (file-name-nondirectory file))
-	      org-stored-links)))
-
 (defun org-attach-url (url)
   (interactive "MURL of the file to attach: \n")
   (let ((org-attach-method 'url))
@@ -511,9 +500,13 @@ METHOD may be `cp', `mv', `ln', `lns' or `url' default taken from
       (run-hook-with-args 'org-attach-after-change-hook attach-dir)
       (org-attach-tag)
       (cond ((eq org-attach-store-link-p 'attached)
-             (org-attach-store-link fname))
+	     (push (list (concat "attachment:" (file-name-nondirectory fname))
+			 (file-name-nondirectory fname))
+		   org-stored-links))
             ((eq org-attach-store-link-p t)
-             (org-attach-store-link file)))
+             (push (list (concat "file:" file)
+			 (file-name-nondirectory file))
+		   org-stored-links)))
       (if visit-dir
           (dired attach-dir)
         (message "File %S is now an attachment." basename)))))
@@ -642,36 +635,8 @@ See `org-attach-open'."
 Basically, this adds the path to the attachment directory."
   (expand-file-name file (org-attach-dir)))
 
-(defun org-attach-expand-link (file)
-  "Return a file link pointing to the current entry's attachment file FILE.
-Basically, this adds the path to the attachment directory, and a \"file:\"
-prefix."
-  (concat "file:" (org-attach-expand file)))
-
 (org-link-set-parameters "attachment"
-                         :follow #'org-attach-open-link
-                         :export #'org-attach-export-link
                          :complete #'org-attach-complete-link)
-
-(defun org-attach-open-link (link &optional in-emacs)
-  "Attachment link type LINK is expanded with the attached directory and opened.
-
-With optional prefix argument IN-EMACS, Emacs will visit the file.
-With a double \\[universal-argument] \\[universal-argument] \
-prefix arg, Org tries to avoid opening in Emacs
-and to use an external application to visit the file."
-  (interactive "P")
-  (let (line search)
-    (cond
-     ((string-match "::\\([0-9]+\\)\\'" link)
-      (setq line (string-to-number (match-string 1 link))
-	    link (substring link 0 (match-beginning 0))))
-     ((string-match "::\\(.+\\)\\'" link)
-      (setq search (match-string 1 link)
-            link (substring link 0 (match-beginning 0)))))
-    (if (string-match "[*?{]" (file-name-nondirectory link))
-        (dired (org-attach-expand link))
-      (org-open-file (org-attach-expand link) in-emacs line search))))
 
 (defun org-attach-complete-link ()
   "Advise the user with the available files in the attachment directory."
@@ -690,26 +655,6 @@ and to use an external application to visit the file."
 	    (concat "attachment:" (match-string 1 (expand-file-name file))))
 	   (t (concat "attachment:" file))))
       (error "No attachment directory exist"))))
-
-(defun org-attach-export-link (link description format)
-  "Translate attachment LINK from Org mode format to exported FORMAT.
-Also includes the DESCRIPTION of the link in the export."
-  (save-excursion
-    (let (path desc)
-      (cond
-       ((string-match "::\\([0-9]+\\)\\'" link)
-        (setq link (substring link 0 (match-beginning 0))))
-       ((string-match "::\\(.+\\)\\'" link)
-        (setq link (substring link 0 (match-beginning 0)))))
-      (setq path (file-relative-name (org-attach-expand link))
-            desc (or description link))
-      (pcase format
-        (`html (format "<a target=\"_blank\" href=\"%s\">%s</a>" path desc))
-        (`latex (format "\\href{%s}{%s}" path desc))
-        (`texinfo (format "@uref{%s,%s}" path desc))
-        (`ascii (format "%s (%s)" desc path))
-        (`md (format "[%s](%s)" desc path))
-        (_ path)))))
 
 (defun org-attach-archive-delete-maybe ()
   "Maybe delete subtree attachments when archiving.

@@ -1,6 +1,6 @@
 ;;; ob-eshell.el --- Babel Functions for Eshell      -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2018 Free Software Foundation, Inc.
+;; Copyright (C) 2018-2020 Free Software Foundation, Inc.
 
 ;; Author: stardiviner <numbchild@gmail.com>
 ;; Keywords: literate programming, reproducible research
@@ -28,6 +28,13 @@
 ;;; Code:
 (require 'ob)
 (require 'eshell)
+
+(declare-function eshell-send-input "esh-mode"
+                  (&optional use-region queue-p no-newline))
+
+(defvar eshell-last-output-start)
+(defvar eshell-last-output-end)
+(defvar eshell-last-input-end)
 
 (defvar org-babel-default-header-args:eshell '())
 

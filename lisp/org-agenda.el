@@ -1,6 +1,6 @@
 ;;; org-agenda.el --- Dynamic task and appointment lists for Org
 
-;; Copyright (C) 2004-2019 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2020 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -5135,6 +5135,7 @@ of what a project is and how to check if it stuck, customize the variable
 	  (cons 'org-diary-default-entry diary-list-entries-hook))
 	 (diary-file-name-prefix nil) ; turn this feature off
 	 (diary-modify-entry-list-string-function 'org-modify-diary-entry-string)
+	 (diary-time-regexp (concat "^" diary-time-regexp))
 	 entries
 	 (org-disable-agenda-to-diary t))
     (save-excursion
@@ -7636,7 +7637,7 @@ and deselects entries with tag `John' or matching the regexp `plot'.
 
 During entry of the filter, completion for tags, categories and effort
 values is offered.  Since the syntax for categories and tags is identical
-there should be no overlap between categoroes and tags.  If there is, tags
+there should be no overlap between categories and tags.  If there is, tags
 get priority.
 
 A single `\\[universal-argument]' prefix arg STRIP-OR-ACCUMULATE will negate the
@@ -7670,7 +7671,7 @@ the variable `org-agenda-auto-exclude-function'."
 		       (if negate "Negative filter" "Filter")
 		       " [+cat-tag<0:10-/regexp/]: ")
 		      'org-agenda-filter-completion-function))
-	   (keep (or (if (string-match "^+[-+]" f-string)
+	   (keep (or (if (string-match "^\\+[+-]" f-string)
 			 (progn (setq f-string (substring f-string 1)) t))
 		     (equal strip-or-accumulate '(16))))
 	   (fc (if keep org-agenda-category-filter))
@@ -7760,7 +7761,8 @@ which see."
     (org-agenda-filter-show-all-top-filter))
   (when org-agenda-effort-filter
     (org-agenda-filter-show-all-effort))
-  (org-agenda-finalize))
+  (org-agenda-finalize)
+  (message "All agenda filters removed"))
 
 (defun org-agenda-filter-by-tag (strip-or-accumulate &optional char exclude)
   "Keep only those lines in the agenda buffer that have a specific tag.
@@ -7992,29 +7994,27 @@ argument EXPAND can be used for the TYPE tag and will expand the
 tags in the FILTER if any of the tags in FILTER are grouptags."
   ;; Deactivate `org-agenda-entry-text-mode' when filtering
   (when org-agenda-entry-text-mode (org-agenda-entry-text-mode))
-  (let (tags cat txt)
-    (setq org-agenda-filter-form (org-agenda-filter-make-matcher
-				  filter type expand))
-    ;; Only set `org-agenda-filtered-by-category' to t when a unique
-    ;; category is used as the filter:
-    (setq org-agenda-filtered-by-category
-	  (and (eq type 'category)
-	       (not (equal (substring (car filter) 0 1) "-"))))
-    (org-agenda-set-mode-name)
-    (save-excursion
-      (goto-char (point-min))
-      (while (not (eobp))
-	(if (org-get-at-bol 'org-marker)
-	    (progn
-	      (setq tags (org-get-at-bol 'tags)
-		    cat (org-agenda-get-category)
-		    txt (org-get-at-bol 'txt))
-	      (unless (eval org-agenda-filter-form)
-		(org-agenda-filter-hide-line type))
-	      (beginning-of-line 2))
-	  (beginning-of-line 2))))
-    (when (get-char-property (point) 'invisible)
-      (ignore-errors (org-agenda-previous-line)))))
+  (setq org-agenda-filter-form (org-agenda-filter-make-matcher
+				filter type expand))
+  ;; Only set `org-agenda-filtered-by-category' to t when a unique
+  ;; category is used as the filter:
+  (setq org-agenda-filtered-by-category
+	(and (eq type 'category)
+	     (not (equal (substring (car filter) 0 1) "-"))))
+  (org-agenda-set-mode-name)
+  (save-excursion
+    (goto-char (point-min))
+    (while (not (eobp))
+      (when (or (org-get-at-bol 'org-hd-marker)
+		(org-get-at-bol 'org-marker))
+	(let ((tags (org-get-at-bol 'tags))
+	      (cat (org-agenda-get-category))
+	      (txt (or (org-get-at-bol 'txt) "")))
+	  (unless (eval org-agenda-filter-form)
+	    (org-agenda-filter-hide-line type))))
+      (beginning-of-line 2)))
+  (when (get-char-property (point) 'invisible)
+    (ignore-errors (org-agenda-previous-line))))
 
 (defun org-agenda-filter-top-headline-apply (hl &optional negative)
   "Filter by top headline HL."
@@ -8584,14 +8584,14 @@ When called with a prefix argument, include all archive files as well."
 	      (if (or org-agenda-category-filter
 		      (get 'org-agenda-category-filter :preset-filter))
 		  '(:eval (propertize
-	      		   (concat "["
+			   (concat "["
 	      			   (mapconcat
 	      			    'identity
 	      			    (append
 	      			     (get 'org-agenda-category-filter :preset-filter)
 	      			     org-agenda-category-filter)
 	      			    "")
-	      			   "]")
+				   "]")
 	      		   'face 'org-agenda-filter-category
 	      		   'help-echo "Category used in filtering")) "")
 	      (if (or org-agenda-tag-filter

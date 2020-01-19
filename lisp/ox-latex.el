@@ -1,6 +1,6 @@
 ;;; ox-latex.el --- LaTeX Back-End for Org Export Engine -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2019 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2020 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou at gmail dot com>
 ;; Keywords: outlines, hypermedia, calendar, wp
@@ -29,6 +29,8 @@
 (require 'cl-lib)
 (require 'ox)
 (require 'ox-publish)
+
+;;; Function Declarations
 
 (defvar org-latex-default-packages-alist)
 (defvar org-latex-packages-alist)
@@ -737,6 +739,8 @@ environment."
 
 (defcustom org-latex-inline-image-rules
   `(("file" . ,(regexp-opt
+		'("pdf" "jpeg" "jpg" "png" "ps" "eps" "tikz" "pgf" "svg")))
+    ("attachment" . ,(regexp-opt
 		'("pdf" "jpeg" "jpg" "png" "ps" "eps" "tikz" "pgf" "svg"))))
   "Rules characterizing image files that can be inlined into LaTeX.
 
@@ -2355,7 +2359,9 @@ CONTENTS is nil.  INFO is a plist holding contextual information."
 LINK is the link pointing to the inline image.  INFO is a plist
 used as a communication channel."
   (let* ((parent (org-export-get-parent-element link))
-	 (path (let ((raw-path (org-element-property :path link)))
+	 (path (let ((raw-path (if (string= (org-element-property :type link) "attachment")
+				   (org-element-property :attachment-path link)
+				 (org-element-property :path link))))
 		 (if (not (file-name-absolute-p raw-path)) raw-path
 		   (expand-file-name raw-path))))
 	 (filetype (file-name-extension path))
@@ -2425,7 +2431,8 @@ used as a communication channel."
 		       (format "\\resizebox{%s}{%s}{%s}"
 			       (if (org-string-nw-p width) width "!")
 			       (if (org-string-nw-p height) height "!")
-			       image-code)))))
+			       image-code))
+		      (t image-code))))
       ;; For other images:
       ;; - add scale, or width and height to options.
       ;; - include the image with \includegraphics.
@@ -2519,7 +2526,9 @@ INFO is a plist holding contextual information.  See
 	 (path (org-latex--protect-text
 		(cond ((member type '("http" "https" "ftp" "mailto" "doi"))
 		       (concat type ":" raw-path))
-		      ((string= type "file")
+		      ((member type '("file" "attachment"))
+		       (when (string= type "attachment")
+			 (setq raw-path (org-element-property :attachment-path link)))
 		       (org-export-file-uri raw-path))
 		      (t
 		       raw-path)))))

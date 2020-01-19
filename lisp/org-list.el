@@ -1,6 +1,6 @@
 ;;; org-list.el --- Plain lists for Org              -*- lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2004-2019 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2020 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;;	   Bastien Guerry <bzg@gnu.org>
@@ -86,7 +86,6 @@
 (defvar org-clock-string)
 (defvar org-closed-string)
 (defvar org-deadline-string)
-(defvar org-description-max-indent)
 (defvar org-done-keywords)
 (defvar org-drawer-regexp)
 (defvar org-element-all-objects)
