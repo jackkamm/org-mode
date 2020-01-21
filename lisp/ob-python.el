@@ -252,14 +252,18 @@ with open('%s') as f:
     __org_babel_python_ast = ast.parse(f.read())
 
 __org_babel_python_final = __org_babel_python_ast.body[-1]
-if type(__org_babel_python_final) == ast.Expr:
-    __org_babel_python_ast.body = __org_babel_python_ast.body[:-1]
-    exec(compile(__org_babel_python_ast, '<string>', 'exec'))
-    __org_babel_python_final = eval(compile(ast.Expression(
-        __org_babel_python_final.value), '<string>', 'eval'))
-else:
-    exec(compile(__org_babel_python_ast, '<string>', 'exec'))
-    __org_babel_python_final = None")
+try:
+    if type(__org_babel_python_final) == ast.Expr:
+        __org_babel_python_ast.body = __org_babel_python_ast.body[:-1]
+        exec(compile(__org_babel_python_ast, '<string>', 'exec'))
+        __org_babel_python_final = eval(compile(ast.Expression(
+            __org_babel_python_final.value), '<string>', 'eval'))
+    else:
+        exec(compile(__org_babel_python_ast, '<string>', 'exec'))
+        __org_babel_python_final = None
+except Exception as e:
+        __org_babel_python_final = e
+        raise e")
 
 (defun org-babel-python-evaluate
   (session body &optional result-type result-params preamble)
