@@ -16739,47 +16739,39 @@ INCLUDE-LINKED is passed to `org-display-inline-images'."
 ;; For without-x builds.
 (declare-function image-refresh "image" (spec &optional frame))
 
-(defcustom org-display-remote-inline-images 'skip-warn
+(defcustom org-display-remote-inline-images 'skip
   "How to display remote inline images.
 Possible values of this option are:
 
-skip-warn         Don't display, and emit a message about it.
-skip-silent       Don't display, and don't warn about it.
+skip              Don't display remote images.
 download-always   Always download and display remote images.
-cache-in-buffer   Display remote images, and open them in separate buffers for
-                  cache'ing.  Silently update the image buffer when a file
+cache-buffer      Display remote images, and open them in separate buffers for
+                  cacheing.  Silently update the image buffer when a file
                   change is detected."
+  :group 'org-appearance
+  :package-version '(Org . "9.4")
   :type '(choice
-	  (const skip-warn)
-	  (const skip-silent)
+	  (const skip)
 	  (const download-always)
-	  (const cache-in-buffers))
-  :group 'org-appearance)
+	  (const cache-buffer))
+  :safe #'symbolp)
 
-(defun org-inline-image--buffer-unibyte ()
-  (string-make-unibyte (buffer-substring-no-properties
-			(point-min) (point-max))))
-
-(defun org-inline-image--create (file width)
+(defun org--create-inline-image (file width)
   (let* ((remote-p (file-remote-p file))
 	 (file-or-data
-	  (if remote-p
-	      (pcase org-display-remote-inline-images
-		(`download-always (with-temp-buffer (insert-file-contents file)
-						    (org-inline-image--buffer-unibyte)))
-		(`cache-in-buffers (let ((revert-without-query '(".*")))
-				     (with-current-buffer
-					 (find-file-noselect file)
-				       (org-inline-image--buffer-unibyte))))
-		(`skip-warn (message
-			     (concat "Set `org-display-remote-inline-images'"
-				     " to display remote images."))
-			    nil)
-		(`skip-silent nil)
-		(_ (message (concat "Invalid value of "
-				    "`org-display-remote-inline-images'"))
-		   nil))
-	    file)))
+	  (pcase org-display-remote-inline-images
+	    ((guard (not remote-p)) file-or-data)
+	    (`download-always (with-temp-buffer
+				(insert-file-contents-literally file)
+				(string-make-unibyte
+				 (buffer-string))))
+	    (`cache-buffer (let ((revert-without-query '(".*")))
+			     (with-current-buffer
+				 (find-file-noselect file nil t)
+			       (buffer-string))))
+	    (`skip nil)
+	    (_ (message "Invalid value of `org-display-remote-inline-images'")
+	       nil))))
     (when file-or-data
       (create-image file-or-data
 		    (and (image-type-available-p 'imagemagick)
@@ -16904,7 +16896,7 @@ buffer boundaries with possible narrowing."
 				'org-image-overlay)))
 		      (if (and (car-safe old) refresh)
 			  (image-refresh (overlay-get (cdr old) 'display))
-			(let ((image (org-inline-image--create file width)))
+			(let ((image (org--create-inline-image file width)))
 			  (when image
 			    (let ((ov (make-overlay
 				       (org-element-property :begin link)
