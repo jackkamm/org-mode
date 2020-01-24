@@ -16767,7 +16767,7 @@ cache-buffer      Display remote images, and open them in separate buffers for
 				 (buffer-string))))
 	    (`cache-buffer (let ((revert-without-query '(".*")))
 			     (with-current-buffer
-				 (find-file-noselect file nil t)
+				 (find-file-noselect file)
 			       (buffer-string))))
 	    (`skip nil)
 	    (_ (message "Invalid value of `org-display-remote-inline-images'")
