@@ -16760,7 +16760,7 @@ cache-buffer      Display remote images, and open them in separate buffers for
   (let* ((remote-p (file-remote-p file))
 	 (file-or-data
 	  (pcase org-display-remote-inline-images
-	    ((guard (not remote-p)) file-or-data)
+	    ((guard (not remote-p)) file)
 	    (`download-always (with-temp-buffer
 				(insert-file-contents-literally file)
 				(string-make-unibyte
