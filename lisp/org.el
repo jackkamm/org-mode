@@ -16762,9 +16762,9 @@ cache-buffer      Display remote images, and open them in separate buffers for
 	  (pcase org-display-remote-inline-images
 	    ((guard (not remote-p)) file)
 	    (`download-always (with-temp-buffer
+				(set-buffer-multibyte nil)
 				(insert-file-contents-literally file)
-				(string-make-unibyte
-				 (buffer-string))))
+				(buffer-string)))
 	    (`cache-buffer (let ((revert-without-query '(".*")))
 			     (with-current-buffer
 				 (find-file-noselect file)
