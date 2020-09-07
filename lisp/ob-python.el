@@ -70,6 +70,8 @@ This function is called by `org-babel-execute-src-block'."
 	      org-babel-python-command))
 	 (session (org-babel-python-initiate-session
 		   (cdr (assq :session params))))
+	 (graphics-file (and (member "graphics" (assq :result-params params))
+			     (org-babel-graphical-output-file params)))
          (result-params (cdr (assq :result-params params)))
          (result-type (cdr (assq :result-type params)))
 	 (return-val (when (eq result-type 'value)
@@ -85,7 +87,7 @@ This function is called by `org-babel-execute-src-block'."
 	     (format (if session "\n%s" "\nreturn %s") return-val))))
          (result (org-babel-python-evaluate
 		  session full-body result-type
-		  result-params preamble async)))
+		  result-params preamble async graphics-file)))
     (org-babel-reassemble-table
      result
      (org-babel-pick-name (cdr (assq :colname-names params))
@@ -218,24 +220,72 @@ then create.  Return the initialized session."
 (defvar org-babel-python-eoe-indicator "org_babel_python_eoe"
   "A string to indicate that evaluation has completed.")
 
-(defconst org-babel-python-wrapper-method
-  "
+(defconst org-babel-python--def-format-value "\
+def __org_babel_python_format_value(result, result_file, result_params):
+    with open(result_file, 'w') as f:
+        if 'graphics' in result_params:
+            result.savefig(result_file)
+        elif 'pp' in result_params:
+            import pprint
+            f.write(pprint.pformat(result))
+        else:
+            if not set(result_params).intersection(\
+['scalar', 'verbatim', 'raw']):
+                class alist(dict):
+                    def __str__(self):
+                        return '({})'.format(' '.join(['({} . {})'.format(repr(k), repr(v)) for k, v in self.items()]))
+                    def __repr__(self):
+                        return self.__str__()
+                def dict2alist(res):
+                    if isinstance(res, dict):
+                        return alist({k: dict2alist(v) for k, v in res.items()})
+                    elif isinstance(res, list) or isinstance(res, tuple):
+                        return [dict2alist(x) for x in res]
+                    else:
+                        return res
+                result = dict2alist(result)
+                try:
+                    import pandas as pd
+                except ImportError:
+                    pass
+                else:
+                    if isinstance(result, pd.DataFrame):
+                        result = [[''] + list(result.columns), None] + \
+[[i] + list(row) for i, row in result.iterrows()]
+                    elif isinstance(result, pd.Series):
+                        result = list(result.items())
+                try:
+                    import numpy as np
+                except ImportError:
+                    pass
+                else:
+                    if isinstance(result, np.ndarray):
+                        result = result.tolist()
+            f.write(str(result))")
+
+(defun org-babel-python--output-graphics-wrapper
+    (body graphics-file)
+  "Wrap BODY to plot to GRAPHICS-FILE if it is non-nil."
+  (if graphics-file
+      (format "\
+import matplotlib.pyplot as __org_babel_python_plt
+__org_babel_python_plt.gcf().clear()
+%s
+__org_babel_python_plt.savefig('%s')" body graphics-file)
+    body))
+
+(defconst org-babel-python--nonsession-value-wrapper
+  (concat org-babel-python--def-format-value "
 def main():
 %s
 
-open('%s', 'w').write( str(main()) )")
-(defconst org-babel-python-pp-wrapper-method
-  "
-import pprint
-def main():
-%s
+__org_babel_python_format_value(main(), '%s', %s)")
+  "TODO")
 
-open('%s', 'w').write( pprint.pformat(main()) )")
-
-(defconst org-babel-python--exec-tmpfile "\
-with open('%s') as __org_babel_python_tmpfile:
-    exec(compile(__org_babel_python_tmpfile.read(), __org_babel_python_tmpfile.name, 'exec'))"
-  "Template for Python session command with output results.
+(defconst org-babel-python--session-output-wrapper "\
+with open('%s') as f:
+    exec(compile(f.read(), f.name, 'exec'))"
+  "Wrapper for session block with output results.
 
 Has a single %s escape, the tempfile containing the source code
 to evaluate.")
@@ -243,7 +293,8 @@ to evaluate.")
 (defun org-babel-python-format-session-value
     (src-file result-file result-params)
   "Return Python code to evaluate SRC-FILE and write result to RESULT-FILE."
-  (format "\
+  (concat org-babel-python--def-format-value
+	  (format "
 import ast
 with open('%s') as __org_babel_python_tmpfile:
     __org_babel_python_ast = ast.parse(__org_babel_python_tmpfile.read())
@@ -253,30 +304,25 @@ if isinstance(__org_babel_python_final, ast.Expr):
     exec(compile(__org_babel_python_ast, '<string>', 'exec'))
     __org_babel_python_final = eval(compile(ast.Expression(
         __org_babel_python_final.value), '<string>', 'eval'))
-    with open('%s', 'w') as __org_babel_python_tmpfile:
-        if %s:
-            import pprint
-            __org_babel_python_tmpfile.write(pprint.pformat(__org_babel_python_final))
-        else:
-            __org_babel_python_tmpfile.write(str(__org_babel_python_final))
 else:
     exec(compile(__org_babel_python_ast, '<string>', 'exec'))
-    __org_babel_python_final = None"
-	  (org-babel-process-file-name src-file 'noquote)
-	  (org-babel-process-file-name result-file 'noquote)
-	  (if (member "pp" result-params) "True" "False")))
+    __org_babel_python_final = None
+__org_babel_python_format_value(__org_babel_python_final, '%s', %s)"
+		  (org-babel-process-file-name src-file 'noquote)
+		  (org-babel-process-file-name result-file 'noquote)
+		  (org-babel-python-var-to-python result-params))))
 
 (defun org-babel-python-evaluate
-    (session body &optional result-type result-params preamble async)
+    (session body &optional result-type result-params preamble async graphics-file)
   "Evaluate BODY as Python code."
   (if session
       (if async
 	  (org-babel-python-async-evaluate-session
-	   session body result-type result-params)
+	   session body result-type result-params graphics-file)
 	(org-babel-python-evaluate-session
-	 session body result-type result-params))
+	 session body result-type result-params graphics-file))
     (org-babel-python-evaluate-external-process
-     body result-type result-params preamble)))
+     body result-type result-params preamble graphics-file)))
 
 (defun org-babel-python--shift-right (body &optional count)
   (with-temp-buffer
@@ -292,7 +338,7 @@ else:
     (buffer-string)))
 
 (defun org-babel-python-evaluate-external-process
-    (body &optional result-type result-params preamble)
+    (body &optional result-type result-params preamble graphics-file)
   "Evaluate BODY in external python process.
 If RESULT-TYPE equals `output' then return standard output as a
 string.  If RESULT-TYPE equals `value' then return the value of the
@@ -301,19 +347,20 @@ last statement in BODY, as elisp."
          (pcase result-type
            (`output (org-babel-eval org-babel-python-command
 				    (concat preamble (and preamble "\n")
-					    body)))
-           (`value (let ((tmp-file (org-babel-temp-file "python-")))
+					    (org-babel-python--output-graphics-wrapper
+					     body graphics-file))))
+           (`value (let ((results-file (or graphics-file
+				           (org-babel-temp-file "python-"))))
 		     (org-babel-eval
 		      org-babel-python-command
 		      (concat
 		       preamble (and preamble "\n")
 		       (format
-			(if (member "pp" result-params)
-			    org-babel-python-pp-wrapper-method
-			  org-babel-python-wrapper-method)
-			(org-babel-python--shift-right body)
-			(org-babel-process-file-name tmp-file 'noquote))))
-		     (org-babel-eval-read-file tmp-file))))))
+			org-babel-python--nonsession-value-wrapper
+                        (org-babel-python--shift-right body)
+			(org-babel-process-file-name results-file 'noquote)
+			(org-babel-python-var-to-python result-params))))
+		     (org-babel-eval-read-file results-file))))))
     (org-babel-result-cond result-params
       raw
       (org-babel-python-table-or-string (org-trim raw)))))
@@ -347,7 +394,7 @@ finally:
       (org-babel-chomp (substring string-buffer 0 (match-beginning 0))))))
 
 (defun org-babel-python-evaluate-session
-    (session body &optional result-type result-params)
+    (session body &optional result-type result-params graphics-file)
   "Pass BODY to the Python process in SESSION.
 If RESULT-TYPE equals `output' then return standard output as a
 string.  If RESULT-TYPE equals `value' then return the value of the
@@ -358,17 +405,20 @@ last statement in BODY, as elisp."
 	    (with-temp-file tmp-src-file (insert body))
             (pcase result-type
 	      (`output
-	       (let ((body (format org-babel-python--exec-tmpfile
-				   (org-babel-process-file-name
-				    tmp-src-file 'noquote))))
+	       (let ((body (org-babel-python--output-graphics-wrapper
+			       (format org-babel-python--session-output-wrapper
+				       (org-babel-process-file-name
+					tmp-src-file 'noquote))
+			       graphics-file)))
 		 (org-babel-python-send-string session body)))
               (`value
-               (let* ((tmp-results-file (org-babel-temp-file "python-"))
+               (let* ((results-file (or graphics-file
+					(org-babel-temp-file "python-")))
 		      (body (org-babel-python-format-session-value
-			     tmp-src-file tmp-results-file result-params)))
+			     tmp-src-file results-file result-params)))
 		 (org-babel-python-send-string session body)
 		 (sleep-for 0 10)
-		 (org-babel-eval-read-file tmp-results-file)))))))
+		 (org-babel-eval-read-file results-file)))))))
     (org-babel-result-cond result-params
       results
       (org-babel-python-table-or-string results))))
@@ -391,8 +441,9 @@ last statement in BODY, as elisp."
       results
       (org-babel-python-table-or-string results))))
 
+;; TODO Implement graphics-file
 (defun org-babel-python-async-evaluate-session
-    (session body &optional result-type result-params)
+    (session body &optional result-type result-params graphics-file)
   "Asynchronously evaluate BODY in SESSION.
 Returns a placeholder string for insertion, to later be replaced
 by `org-babel-comint-async-filter'."
