@@ -576,6 +576,21 @@ of all relational operators (~<*~, ~=*~, ~!=*~, etc.) that work like
 the regular, unstarred operators but match a headline only if the
 tested property is actually present.
 
+*** =ob-python.el=: Support for more result types and plotting
+
+=ob-python= now recognizes numpy arrays, and pandas dataframes/series,
+and will convert them to org-mode tables when appropriate.
+
+In addition, dict results are now returned in appropriate string form,
+instead of being mangled as they were previously.
+
+When the header argument =:results graphics= is set, =ob-python= will
+use matplotlib to save graphics. The behavior depends on whether value
+or output results are used. For value results, the last line should
+return a matplotlib Figure object to plot. For output results, the
+current figure (as returned by =pyplot.gcf()=) is cleared before
+evaluation, and then plotted afterwards.
+
 ** New functions and changes in function arguments
 *** =TYPES= argument in ~org-element-lineage~ can now be a symbol
 
@@ -2041,8 +2056,8 @@ to switch to the new signature.
 *** Python session return values must be top-level expression statements
 
 Python blocks with ~:session :results value~ header arguments now only
-return a value if the last line is a top-level expression statement.
-Also, when a None value is returned, "None" will be printed under
+return a value if the last line is a top-level expression statement,
+otherwise the result is None. Also, None will now show up under
 "#+RESULTS:", as it already did with ~:results value~ for non-session
 blocks.
 

@@ -70,6 +70,8 @@ This function is called by `org-babel-execute-src-block'."
 	      org-babel-python-command))
 	 (session (org-babel-python-initiate-session
 		   (cdr (assq :session params))))
+	 (graphics-file (and (member "graphics" (assq :result-params params))
+			     (org-babel-graphical-output-file params)))
          (result-params (cdr (assq :result-params params)))
          (result-type (cdr (assq :result-type params)))
 	 (return-val (when (eq result-type 'value)
@@ -85,7 +87,7 @@ This function is called by `org-babel-execute-src-block'."
 	     (format (if session "\n%s" "\nreturn %s") return-val))))
          (result (org-babel-python-evaluate
 		  session full-body result-type
-		  result-params preamble async)))
+		  result-params preamble async graphics-file)))
     (org-babel-reassemble-table
      result
      (org-babel-pick-name (cdr (assq :colname-names params))
@@ -142,7 +144,9 @@ specifying a variable of the same value."
   "Convert RESULTS into an appropriate elisp value.
 If the results look like a list or tuple, then convert them into an
 Emacs-lisp table, otherwise return the results as a string."
-  (let ((res (org-babel-script-escape results)))
+  (let ((res (if (string-equal "{" (substring results 0 1))
+                 results ;don't covert dicts to elisp
+               (org-babel-script-escape results))))
     (if (listp res)
         (mapcar (lambda (el) (if (eq el 'None)
                                  org-babel-python-None-to el))
@@ -218,32 +222,51 @@ then create.  Return the initialized session."
 (defvar org-babel-python-eoe-indicator "org_babel_python_eoe"
   "A string to indicate that evaluation has completed.")
 
-(defconst org-babel-python-wrapper-method
-  "
-def main():
+(defconst org-babel-python--output-graphics-wrapper "\
+import matplotlib.pyplot
+matplotlib.pyplot.gcf().clear()
 %s
+matplotlib.pyplot.savefig('%s')"
+  "Format string for saving Python graphical output.
+Has two %s escapes, for the Python code to be evaluated, and the
+file to save the graphics to.")
 
-open('%s', 'w').write( str(main()) )")
-(defconst org-babel-python-pp-wrapper-method
-  "
-import pprint
-def main():
-%s
-
-open('%s', 'w').write( pprint.pformat(main()) )")
-
-(defconst org-babel-python--exec-tmpfile "\
-with open('%s') as __org_babel_python_tmpfile:
-    exec(compile(__org_babel_python_tmpfile.read(), __org_babel_python_tmpfile.name, 'exec'))"
-  "Template for Python session command with output results.
-
-Has a single %s escape, the tempfile containing the source code
-to evaluate.")
+(defconst org-babel-python--def-format-value "\
+def __org_babel_python_format_value(result, result_file, result_params):
+    with open(result_file, 'w') as f:
+        if 'graphics' in result_params:
+            result.savefig(result_file)
+        elif 'pp' in result_params:
+            import pprint
+            f.write(pprint.pformat(result))
+        else:
+            if not set(result_params).intersection(\
+['scalar', 'verbatim', 'raw']):
+                try:
+                    import pandas
+                except ImportError:
+                    pass
+                else:
+                    if isinstance(result, pandas.DataFrame):
+                        result = [[''] + list(result.columns), None] + \
+[[i] + list(row) for i, row in result.iterrows()]
+                    elif isinstance(result, pandas.Series):
+                        result = list(result.items())
+                try:
+                    import numpy
+                except ImportError:
+                    pass
+                else:
+                    if isinstance(result, numpy.ndarray):
+                        result = result.tolist()
+            f.write(str(result))"
+  "Python function to format value result and save it to file.")
 
 (defun org-babel-python-format-session-value
     (src-file result-file result-params)
   "Return Python code to evaluate SRC-FILE and write result to RESULT-FILE."
-  (format "\
+  (concat org-babel-python--def-format-value
+	  (format "
 import ast
 with open('%s') as __org_babel_python_tmpfile:
     __org_babel_python_ast = ast.parse(__org_babel_python_tmpfile.read())
@@ -253,30 +276,25 @@ if isinstance(__org_babel_python_final, ast.Expr):
     exec(compile(__org_babel_python_ast, '<string>', 'exec'))
     __org_babel_python_final = eval(compile(ast.Expression(
         __org_babel_python_final.value), '<string>', 'eval'))
-    with open('%s', 'w') as __org_babel_python_tmpfile:
-        if %s:
-            import pprint
-            __org_babel_python_tmpfile.write(pprint.pformat(__org_babel_python_final))
-        else:
-            __org_babel_python_tmpfile.write(str(__org_babel_python_final))
 else:
     exec(compile(__org_babel_python_ast, '<string>', 'exec'))
-    __org_babel_python_final = None"
-	  (org-babel-process-file-name src-file 'noquote)
-	  (org-babel-process-file-name result-file 'noquote)
-	  (if (member "pp" result-params) "True" "False")))
+    __org_babel_python_final = None
+__org_babel_python_format_value(__org_babel_python_final, '%s', %s)"
+		  (org-babel-process-file-name src-file 'noquote)
+		  (org-babel-process-file-name result-file 'noquote)
+		  (org-babel-python-var-to-python result-params))))
 
 (defun org-babel-python-evaluate
-    (session body &optional result-type result-params preamble async)
+    (session body &optional result-type result-params preamble async graphics-file)
   "Evaluate BODY as Python code."
   (if session
       (if async
 	  (org-babel-python-async-evaluate-session
-	   session body result-type result-params)
+	   session body result-type result-params graphics-file)
 	(org-babel-python-evaluate-session
-	 session body result-type result-params))
+	 session body result-type result-params graphics-file))
     (org-babel-python-evaluate-external-process
-     body result-type result-params preamble)))
+     body result-type result-params preamble graphics-file)))
 
 (defun org-babel-python--shift-right (body &optional count)
   (with-temp-buffer
@@ -292,28 +310,36 @@ else:
     (buffer-string)))
 
 (defun org-babel-python-evaluate-external-process
-    (body &optional result-type result-params preamble)
+    (body &optional result-type result-params preamble graphics-file)
   "Evaluate BODY in external python process.
 If RESULT-TYPE equals `output' then return standard output as a
-string.  If RESULT-TYPE equals `value' then return the value of the
-last statement in BODY, as elisp."
+string.  If RESULT-TYPE equals `value' then return the value of
+the last statement in BODY, as elisp.  If GRAPHICS-FILE is
+non-nil, then save graphical results to that file instead."
   (let ((raw
          (pcase result-type
            (`output (org-babel-eval org-babel-python-command
 				    (concat preamble (and preamble "\n")
-					    body)))
-           (`value (let ((tmp-file (org-babel-temp-file "python-")))
+                                            (if graphics-file
+                                                (format org-babel-python--output-graphics-wrapper
+                                                        body graphics-file)
+                                              body))))
+           (`value (let ((results-file (or graphics-file
+				           (org-babel-temp-file "python-"))))
 		     (org-babel-eval
 		      org-babel-python-command
 		      (concat
 		       preamble (and preamble "\n")
 		       (format
-			(if (member "pp" result-params)
-			    org-babel-python-pp-wrapper-method
-			  org-babel-python-wrapper-method)
-			(org-babel-python--shift-right body)
-			(org-babel-process-file-name tmp-file 'noquote))))
-		     (org-babel-eval-read-file tmp-file))))))
+			(concat org-babel-python--def-format-value "
+def main():
+%s
+
+__org_babel_python_format_value(main(), '%s', %s)")
+                        (org-babel-python--shift-right body)
+			(org-babel-process-file-name results-file 'noquote)
+			(org-babel-python-var-to-python result-params))))
+		     (org-babel-eval-read-file results-file))))))
     (org-babel-result-cond result-params
       raw
       (org-babel-python-table-or-string (org-trim raw)))))
@@ -347,28 +373,36 @@ finally:
       (org-babel-chomp (substring string-buffer 0 (match-beginning 0))))))
 
 (defun org-babel-python-evaluate-session
-    (session body &optional result-type result-params)
+    (session body &optional result-type result-params graphics-file)
   "Pass BODY to the Python process in SESSION.
 If RESULT-TYPE equals `output' then return standard output as a
-string.  If RESULT-TYPE equals `value' then return the value of the
-last statement in BODY, as elisp."
+string.  If RESULT-TYPE equals `value' then return the value of
+the last statement in BODY, as elisp.  If GRAPHICS-FILE is
+non-nil, then save graphical results to that file instead."
   (let* ((tmp-src-file (org-babel-temp-file "python-"))
          (results
 	  (progn
-	    (with-temp-file tmp-src-file (insert body))
+	    (with-temp-file tmp-src-file
+              (insert (if (and graphics-file (eq result-type 'output))
+                          (format org-babel-python--output-graphics-wrapper
+                                  body graphics-file)
+                        body)))
             (pcase result-type
 	      (`output
-	       (let ((body (format org-babel-python--exec-tmpfile
+	       (let ((body (format "\
+with open('%s') as f:
+    exec(compile(f.read(), f.name, 'exec'))"
 				   (org-babel-process-file-name
 				    tmp-src-file 'noquote))))
 		 (org-babel-python-send-string session body)))
               (`value
-               (let* ((tmp-results-file (org-babel-temp-file "python-"))
+               (let* ((results-file (or graphics-file
+					(org-babel-temp-file "python-")))
 		      (body (org-babel-python-format-session-value
-			     tmp-src-file tmp-results-file result-params)))
+			     tmp-src-file results-file result-params)))
 		 (org-babel-python-send-string session body)
 		 (sleep-for 0 10)
-		 (org-babel-eval-read-file tmp-results-file)))))))
+		 (org-babel-eval-read-file results-file)))))))
     (org-babel-result-cond result-params
       results
       (org-babel-python-table-or-string results))))
@@ -392,7 +426,7 @@ last statement in BODY, as elisp."
       (org-babel-python-table-or-string results))))
 
 (defun org-babel-python-async-evaluate-session
-    (session body &optional result-type result-params)
+    (session body &optional result-type result-params graphics-file)
   "Asynchronously evaluate BODY in SESSION.
 Returns a placeholder string for insertion, to later be replaced
 by `org-babel-comint-async-filter'."
@@ -406,7 +440,10 @@ by `org-babel-comint-async-filter'."
        (with-temp-buffer
          (insert (format org-babel-python-async-indicator "start" uuid))
          (insert "\n")
-         (insert body)
+         (insert (if graphics-file
+                     (format org-babel-python--output-graphics-wrapper
+                             body graphics-file)
+                   body))
          (insert "\n")
          (insert (format org-babel-python-async-indicator "end" uuid))
          (let ((python-shell-buffer-name
@@ -414,17 +451,20 @@ by `org-babel-comint-async-filter'."
            (python-shell-send-buffer)))
        uuid))
     (`value
-     (let ((tmp-results-file (org-babel-temp-file "python-"))
+     (let ((results-file (or graphics-file
+			     (org-babel-temp-file "python-")))
            (tmp-src-file (org-babel-temp-file "python-")))
        (with-temp-file tmp-src-file (insert body))
        (with-temp-buffer
-         (insert (org-babel-python-format-session-value tmp-src-file tmp-results-file result-params))
+         (insert (org-babel-python-format-session-value
+                  tmp-src-file results-file result-params))
          (insert "\n")
-         (insert (format org-babel-python-async-indicator "file" tmp-results-file))
+         (unless graphics-file
+           (insert (format org-babel-python-async-indicator "file" results-file)))
          (let ((python-shell-buffer-name
                 (org-babel-python-without-earmuffs session)))
            (python-shell-send-buffer)))
-       tmp-results-file))))
+       results-file))))
 
 (provide 'ob-python)
 
