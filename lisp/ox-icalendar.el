@@ -726,6 +726,13 @@ inlinetask within the section."
        ;; Don't forget components from inner entries.
        contents))))
 
+(defun org-icalendar--rrule (unit value)
+  (format "RRULE:FREQ=%s;INTERVAL=%d\n"
+	  (cl-case unit
+	    (hour "HOURLY") (day "DAILY") (week "WEEKLY")
+	    (month "MONTHLY") (year "YEARLY"))
+	  value))
+
 (defun org-icalendar--vevent
     (entry timestamp uid summary location description categories timezone class)
   "Create a VEVENT component.
@@ -752,12 +759,9 @@ Return VEVENT component as a string."
 	     (org-icalendar-convert-timestamp timestamp "DTSTART" nil timezone) "\n"
 	     (org-icalendar-convert-timestamp timestamp "DTEND" t timezone) "\n"
 	     ;; RRULE.
-	     (when (org-element-property :repeater-type timestamp)
-	       (format "RRULE:FREQ=%s;INTERVAL=%d\n"
-		       (cl-case (org-element-property :repeater-unit timestamp)
-			 (hour "HOURLY") (day "DAILY") (week "WEEKLY")
-			 (month "MONTHLY") (year "YEARLY"))
-		       (org-element-property :repeater-value timestamp)))
+             (org-icalendar--rrule
+              (org-element-property :repeater-unit timestamp)
+              (org-element-property :repeater-value timestamp))
 	     "SUMMARY:" summary "\n"
 	     (and (org-string-nw-p location) (format "LOCATION:%s\n" location))
 	     (and (org-string-nw-p class) (format "CLASS:%s\n" class))
@@ -792,7 +796,9 @@ Return VTODO component as a string."
 				   :hour-start (nth 2 now)
 				   :day-start (nth 3 now)
 				   :month-start (nth 4 now)
-				   :year-start (nth 5 now))))))))
+				   :year-start (nth 5 now)))))))
+        (due (and (memq 'todo-due org-icalendar-use-deadline)
+                  (org-element-property :deadline entry))))
     (org-icalendar-fold-string
      (concat "BEGIN:VTODO\n"
 	     "UID:TODO-" uid "\n"
@@ -801,11 +807,31 @@ Return VTODO component as a string."
                (concat (org-icalendar-convert-timestamp
                         start "DTSTART" nil timezone)
                        "\n"))
-	     (and (memq 'todo-due org-icalendar-use-deadline)
-		  (org-element-property :deadline entry)
-		  (concat (org-icalendar-convert-timestamp
-			   (org-element-property :deadline entry) "DUE" nil timezone)
-			  "\n"))
+	     (when due
+	       (concat (org-icalendar-convert-timestamp
+			due "DUE" nil timezone)
+		       "\n"))
+             ;; RRULE
+             (let ((start-repeater-unit (org-element-property
+                                         :repeater-unit start))
+                   (start-repeater-value (org-element-property
+                                          :repeater-value start))
+                   (due-repeater-unit (org-element-property
+                                       :repeater-unit due))
+                   (due-repeater-value (org-element-property
+                                        :repeater-value due)))
+               (when (or start-repeater-value due-repeater-value)
+                 (if (and start due
+                          (not (and (eql start-repeater-unit
+                                         due-repeater-unit)
+                                    (eql start-repeater-value
+                                         due-repeater-value))))
+                     (progn (warn "Scheduled and Deadline repeaters are not equal. Skipping repeater export.")
+                            nil)
+                   (org-icalendar--rrule (or start-repeater-unit
+                                             due-repeater-unit)
+                                         (or start-repeater-value
+                                             due-repeater-value)))))
 	     "SUMMARY:" summary "\n"
 	     (and (org-string-nw-p location) (format "LOCATION:%s\n" location))
 	     (and (org-string-nw-p class) (format "CLASS:%s\n" class))

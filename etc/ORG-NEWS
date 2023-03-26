@@ -159,6 +159,19 @@ Running shell blocks with the ~:session~ header freezes Emacs until
 execution completes.  The new ~:async~ header allows users to continue
 editing with Emacs while a ~:session~ block executes.
 
+*** Add support for repeating tasks in iCalendar export
+
+Repeating Scheduled and Deadline timestamps in TODOs are now exported
+as recurring tasks in iCalendar export.
+
+Note that in Org-mode, the repeaters for the Scheduled and Deadline
+timestamps can be different; whereas in iCalendar, the recurrence rule
+applies to both the scheduled start time and the deadline due date.
+
+In case the timestamp repeaters contradict, the correct export
+behavior is not well-defined.  Currently, Org-mode will issue a
+warning and skip the repeaters in this case.
+
 ** Miscellaneous
 *** Remove undocumented ~:target~ header parameter in ~ob-clojure~
 
