@@ -231,6 +231,12 @@ t                    include tasks that are not in DONE state.
 	  (repeat :tag "Specific TODO keywords"
 		  (string :tag "Keyword"))))
 
+(defcustom org-icalendar-todo-force-scheduling nil
+  "Non-nil means unscheduled tasks are exported as scheduled.
+The current date is used as the scheduled time for such tasks."
+  :group 'org-export-icalendar
+  :type 'boolean)
+
 (defcustom org-icalendar-include-bbdb-anniversaries nil
   "Non-nil means a combined iCalendar file should include anniversaries.
 The anniversaries are defined in the BBDB database."
@@ -776,21 +782,25 @@ TIMEZONE specifies a time zone for this TODO only.
 Return VTODO component as a string."
   (let ((start (or (and (memq 'todo-start org-icalendar-use-scheduled)
 			(org-element-property :scheduled entry))
-		   ;; If we can't use a scheduled time for some
-		   ;; reason, start task now.
-		   (let ((now (decode-time)))
-		     (list 'timestamp
-			   (list :type 'active
-				 :minute-start (nth 1 now)
-				 :hour-start (nth 2 now)
-				 :day-start (nth 3 now)
-				 :month-start (nth 4 now)
-				 :year-start (nth 5 now)))))))
+                   (when org-icalendar-todo-force-scheduling
+		     ;; If we can't use a scheduled time for some
+		     ;; reason, start task now.
+                     (let ((now (decode-time)))
+		       (list 'timestamp
+			     (list :type 'active
+				   :minute-start (nth 1 now)
+				   :hour-start (nth 2 now)
+				   :day-start (nth 3 now)
+				   :month-start (nth 4 now)
+				   :year-start (nth 5 now))))))))
     (org-icalendar-fold-string
      (concat "BEGIN:VTODO\n"
 	     "UID:TODO-" uid "\n"
 	     (org-icalendar-dtstamp) "\n"
-	     (org-icalendar-convert-timestamp start "DTSTART" nil timezone) "\n"
+             (when start
+               (concat (org-icalendar-convert-timestamp
+                        start "DTSTART" nil timezone)
+                       "\n"))
 	     (and (memq 'todo-due org-icalendar-use-deadline)
 		  (org-element-property :deadline entry)
 		  (concat (org-icalendar-convert-timestamp

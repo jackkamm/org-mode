@@ -23,6 +23,15 @@ If you still want to use python-mode with ob-python, you might
 consider [[https://gitlab.com/jackkamm/ob-python-mode-mode][ob-python-mode-mode]], where the code to support python-mode
 has been ported to.
 
+*** Icalendar export of TODOs no longer forces a start time
+
+For TODOs without a scheduled start time, ox-icalendar no longer
+forces them to have a scheduled start time of today when exporting.
+This makes it possible to create icalendar TODOs without a start time.
+
+To revert to the old behavior, set the new custom option
+~org-icalendar-todo-force-scheduling~ to non-nil.
+
 ** New and changed options
 *** New ~org-cite-natbib-export-bibliography~ option defining fallback bibliography style
 
@@ -110,6 +119,12 @@ backend used for evaluation of ClojureScript.
 ~ob-clojure~ now supports executing babel source blocks with the
 official [[https://clojure.org/guides/deps_and_cli][Clojure CLI tools]].
 The command can be customized with ~ob-clojure-cli-command~.
+
+*** New ~org-icalendar-todo-force-scheduling~ option for old ox-icalendar TODO scheduling behavior
+
+Set ~org-icalendar-todo-force-scheduling~ to non-nil to revert to the
+old ox-icalendar TODO export behavior, that forced all exported TODOs
+to have a scheduled start time.
 
 ** New features
 *** Add support for ~logind~ idle time in ~org-user-idle-seconds~
