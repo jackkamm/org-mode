@@ -231,11 +231,37 @@ t                    include tasks that are not in DONE state.
 	  (repeat :tag "Specific TODO keywords"
 		  (string :tag "Keyword"))))
 
-(defcustom org-icalendar-todo-force-scheduling nil
-  "Non-nil means unscheduled tasks are exported as scheduled.
-The current date is used as the scheduled time for such tasks."
+(defcustom org-icalendar-todo-unscheduled-dtstart 'recurring-deadline-warning
+  "Exported start date of unscheduled TODOs.
+
+If `org-icalendar-use-scheduled' contains `todo-start' and a task
+has a \"SCHEDULED\" timestamp, that is always used as the start
+date.  Otherwise, this variable controls whether a start date is
+exported and what its value is.
+
+Note that the iCalendar spec RFC 5545 does not generally require
+tasks to have a start date, except for repeating tasks which do
+require a start date.  However some iCalendar programs ignore the
+requirement for repeating tasks, and allow repeating deadlines
+without a matching start date.
+
+This variable has no effect when `org-icalendar-include-todo' is nil.
+
+Valid values are:
+`recurring-deadline-warning'  If deadline repeater present,
+                              use `org-deadline-warning-days' as start.
+`deadline-warning'            If deadline present,
+                              use `org-deadline-warning-days' as start.
+`now'                         Use the current date as start.
+nil                           Never add a start time for unscheduled tasks."
   :group 'org-export-icalendar
-  :type 'boolean)
+  :type '(choice
+	  (const :tag "Warning days if deadline recurring" recurring-deadline-warning)
+	  (const :tag "Warning days if deadline present" deadline-warning)
+	  (const :tag "Now" now)
+	  (const :tag "No start date" nil))
+  :package-version '(Org . "9.7")
+  :safe #'symbolp)
 
 (defcustom org-icalendar-include-bbdb-anniversaries nil
   "Non-nil means a combined iCalendar file should include anniversaries.
@@ -726,6 +752,15 @@ inlinetask within the section."
        ;; Don't forget components from inner entries.
        contents))))
 
+;; TODO: Add optional arguments UNTIL and CATCHUP. UNTIL adds the
+;; UNTIL keyword, but a complication is that it must either be in
+;; local time (without timezone) or UTC -- cannot be local
+;; time+timezone. CATCHUP adds a line for EXDATE, excluding all the
+;; repeats before today, for use with catchup repeater. Possibly, I
+;; should make a helper function to generate a list of all repeats,
+;; and use that with RDATE instead of using RRULE+UNTIL. An advantage
+;; of RDATE over UNTIL is that the timezone spec more closely matches
+;; the other timestamp functions
 (defun org-icalendar--rrule (unit value)
   (format "RRULE:FREQ=%s;INTERVAL=%d\n"
 	  (cl-case unit
@@ -784,21 +819,37 @@ task.  CATEGORIES defines the categories the task belongs to.
 TIMEZONE specifies a time zone for this TODO only.
 
 Return VTODO component as a string."
-  (let ((start (or (and (memq 'todo-start org-icalendar-use-scheduled)
-			(org-element-property :scheduled entry))
-                   (when org-icalendar-todo-force-scheduling
-		     ;; If we can't use a scheduled time for some
-		     ;; reason, start task now.
-                     (let ((now (decode-time)))
-		       (list 'timestamp
-			     (list :type 'active
-				   :minute-start (nth 1 now)
-				   :hour-start (nth 2 now)
-				   :day-start (nth 3 now)
-				   :month-start (nth 4 now)
-				   :year-start (nth 5 now)))))))
-        (due (and (memq 'todo-due org-icalendar-use-deadline)
-                  (org-element-property :deadline entry))))
+  (let* ((due (and (memq 'todo-due org-icalendar-use-deadline)
+                   (org-element-property :deadline entry)))
+         (dl-repeat-p (and (memq (org-element-property :repeater-type due)
+                                 '(cumulate catch-up))
+                           (> (org-element-property :repeater-value due) 0)))
+         (start (cond
+                 ((and (memq 'todo-start org-icalendar-use-scheduled)
+		       (org-element-property :scheduled entry)))
+                 ((eq org-icalendar-todo-unscheduled-dtstart 'now)
+                  (let ((t (decode-time)))
+		    (list 'timestamp
+			  (list :type 'active
+				:minute-start (nth 1 t)
+				:hour-start (nth 2 t)
+				:day-start (nth 3 t)
+				:month-start (nth 4 t)
+				:year-start (nth 5 t)))))
+                 ((or (and (eq org-icalendar-todo-unscheduled-dtstart
+                               'deadline-warning)
+                           due)
+                      (and (eq org-icalendar-todo-unscheduled-dtstart
+                               'repeating-deadline-warning)
+                           dl-repeat-p))
+                  (with-temp-buffer
+	            (insert (org-element-property :raw-value due))
+                    (goto-char (point-min))
+	            (org-timestamp-down-day org-deadline-warning-days)
+	            (org-element-timestamp-parser)))))
+         (sc-repeat-p (and (memq (org-element-property :repeater-type start)
+                                 '(cumulate catch-up))
+                           (> (org-element-property :repeater-value start) 0))))
     (org-icalendar-fold-string
      (concat "BEGIN:VTODO\n"
 	     "UID:TODO-" uid "\n"
@@ -807,31 +858,32 @@ Return VTODO component as a string."
                (concat (org-icalendar-convert-timestamp
                         start "DTSTART" nil timezone)
                        "\n"))
-	     (when due
+	     (when (and due
+                        ;; If scheduled-repeater and not
+                        ;; deadline-repeater, then deadline becomes
+                        ;; RRULE UNTIL instead of DUE
+                        (or dl-repeat-p
+                            (not sc-repeat-p)))
 	       (concat (org-icalendar-convert-timestamp
 			due "DUE" nil timezone)
 		       "\n"))
              ;; RRULE
-             (let ((start-repeater-unit (org-element-property
-                                         :repeater-unit start))
-                   (start-repeater-value (org-element-property
-                                          :repeater-value start))
-                   (due-repeater-unit (org-element-property
-                                       :repeater-unit due))
-                   (due-repeater-value (org-element-property
-                                        :repeater-value due)))
-               (when (or start-repeater-value due-repeater-value)
-                 (if (and start due
-                          (not (and (eql start-repeater-unit
-                                         due-repeater-unit)
-                                    (eql start-repeater-value
-                                         due-repeater-value))))
-                     (progn (warn "Scheduled and Deadline repeaters are not equal. Skipping repeater export.")
-                            nil)
-                   (org-icalendar--rrule (or start-repeater-unit
-                                             due-repeater-unit)
-                                         (or start-repeater-value
-                                             due-repeater-value)))))
+             (cond
+              ((and sc-repeat-p (not dl-repeat-p))
+               (org-icalendar--rrule
+                (org-element-property :repeater-unit start)
+                (org-element-property :repeater-value start)
+                ;; behaves like
+                ;; org-agenda-skip-scheduled-if-deadline-is-shown
+                ;; repeated-after-deadline
+                due
+                (eq (org-element-property :repeater-type start) 'catch-up)))
+              (dl-repeat-p
+               (org-icalendar--rrule
+                (org-element-property :repeater-unit due)
+                (org-element-property :repeater-value due)
+                nil
+                (eq (org-element-property :repeater-type due) 'catch-up))))
 	     "SUMMARY:" summary "\n"
 	     (and (org-string-nw-p location) (format "LOCATION:%s\n" location))
 	     (and (org-string-nw-p class) (format "CLASS:%s\n" class))

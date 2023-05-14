@@ -880,23 +880,28 @@ Use \"export %s\" instead"
     (lambda (e)
       (let* ((scheduled (org-element-property :scheduled e))
              (deadline (org-element-property :deadline e))
-             (scheduled-repeater-unit (org-element-property
-                                       :repeater-unit scheduled))
+             (scheduled-repeater-type (org-element-property
+                                       :repeater-type scheduled))
+             (deadline-repeater-type (org-element-property
+                                      :repeater-type deadline))
              (scheduled-repeater-value (org-element-property
                                         :repeater-value scheduled))
-             (deadline-repeater-unit (org-element-property
-                                      :repeater-unit deadline))
              (deadline-repeater-value (org-element-property
                                        :repeater-value deadline)))
         (when (and scheduled deadline
-                   scheduled-repeater-value
-                   deadline-repeater-value
-                   (not (and (eql scheduled-repeater-unit
-                                  deadline-repeater-unit)
-                             (eql scheduled-repeater-value
-                                  deadline-repeater-value))))
-          (list (org-element-property :begin e)
-                "Different repeaters in SCHEDULED and DEADLINE timestamps."))))))
+                   (memq scheduled-repeater-type '(cumulate catch-up)) 
+                   (memq deadline-repeater-type '(cumulate catch-up)) 
+                   (> scheduled-repeater-value 0)
+                   (> deadline-repeater-value 0)
+                   (not
+                    (and
+                     (eq scheduled-repeater-type deadline-repeater-type)
+                     (eq (org-element-property :repeater-unit scheduled)
+                         (org-element-property :repeater-unit deadline))
+                     (eql scheduled-repeater-value deadline-repeater-value))))
+          (list
+           (org-element-property :begin e)
+           "Different repeaters in SCHEDULED and DEADLINE timestamps."))))))
 
 (defun org-lint-misplaced-planning-info (_)
   (let ((case-fold-search t)
