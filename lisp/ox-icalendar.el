@@ -252,13 +252,13 @@ Valid values are:
                               use `org-deadline-warning-days' as start.
 `deadline-warning'            If deadline present,
                               use `org-deadline-warning-days' as start.
-`now'                         Use the current date as start.
+`current-datetime'            Use the current date-time as start.
 nil                           Never add a start time for unscheduled tasks."
   :group 'org-export-icalendar
   :type '(choice
 	  (const :tag "Warning days if deadline recurring" recurring-deadline-warning)
 	  (const :tag "Warning days if deadline present" deadline-warning)
-	  (const :tag "Now" now)
+	  (const :tag "Now" current-datetime)
 	  (const :tag "No start date" nil))
   :package-version '(Org . "9.7")
   :safe #'symbolp)
@@ -830,15 +830,15 @@ Return VTODO component as a string."
          (start
           (cond
            (sc)
-           ((eq org-icalendar-todo-unscheduled-start 'now)
-            (let ((t (decode-time)))
+           ((eq org-icalendar-todo-unscheduled-start 'current-datetime)
+            (let ((now (decode-time)))
 	      (list 'timestamp
 		    (list :type 'active
-			  :minute-start (nth 1 t)
-			  :hour-start (nth 2 t)
-			  :day-start (nth 3 t)
-			  :month-start (nth 4 t)
-			  :year-start (nth 5 t)))))
+			  :minute-start (nth 1 now)
+			  :hour-start (nth 2 now)
+			  :day-start (nth 3 now)
+			  :month-start (nth 4 now)
+			  :year-start (nth 5 now)))))
            ((or (and (eq org-icalendar-todo-unscheduled-start
                          'deadline-warning)
                      dl)
@@ -858,7 +858,7 @@ Return VTODO component as a string."
              (when start (concat (org-icalendar-convert-timestamp
                                   start "DTSTART" nil timezone)
                                  "\n"))
-	     (when (and dl (not dl-as-until-p))
+	     (when (and dl (not repeat-until))
 	       (concat (org-icalendar-convert-timestamp
 			dl "DUE" nil timezone)
 		       "\n"))
@@ -909,8 +909,8 @@ repeater on DEADLINE but not SCHEDULED. Skipping.")
                               (format-time-string "%Y%m%d" encoded))
                              (local-time-p
                               (format-time-string "%Y%m%dT%H%M%S" encoded))
-                             (format-time-string "%Y%m%dT%H%M%SZ"
-                                                 encoded t)))))
+                             ((format-time-string "%Y%m%dT%H%M%SZ"
+                                                  encoded t))))))
                 "\n")))
 	     "SUMMARY:" summary "\n"
 	     (and (org-string-nw-p location) (format "LOCATION:%s\n" location))
