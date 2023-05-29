@@ -107,7 +107,6 @@ DEADLINE: <2023-05-02 Tue> SCHEDULED: <2023-03-26 Sun 15:00 +3d>"
     (unwind-protect
         (with-temp-buffer
           (insert-file-contents tmp-ics)
-          (print (buffer-string))
           (save-excursion
             (should (re-search-forward "DTSTART:2023032.T..0000")))
           (save-excursion
