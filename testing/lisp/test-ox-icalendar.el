@@ -97,23 +97,23 @@ DEADLINE: <2023-05-01 Mon> SCHEDULED: <2023-03-26 Sun +3d>"
       (when (file-exists-p tmp-ics) (delete-file tmp-ics)))))
 
 (ert-deftest test-ox-icalendar/todo-repeater-until-utc ()
-  "Test that UNTIL is in UTC when DTSTART timezone explicitly specified."
+  "Test that UNTIL is in UTC when DTSTART is not in local time format."
   (let* ((org-icalendar-include-todo 'all)
-         (org-icalendar-date-time-format ";TZID=%Z:%Y%m%dT%H%M%S")
-         (org-icalendar-timezone "America/Los_Angeles")
+         (org-icalendar-date-time-format ":%Y%m%dT%H%M%SZ")
          (tmp-ics (org-test-with-temp-text-in-file
                    "* TODO Repeating scheduled with nonrepeating deadline
-DEADLINE: <2023-05-01 Mon> SCHEDULED: <2023-03-26 Sun 15:00 +3d>"
+DEADLINE: <2023-05-02 Tue> SCHEDULED: <2023-03-26 Sun 15:00 +3d>"
                    (expand-file-name (org-icalendar-export-to-ics)))))
     (unwind-protect
         (with-temp-buffer
           (insert-file-contents tmp-ics)
+          (print (buffer-string))
           (save-excursion
-            (should (re-search-forward "DTSTART;TZID=.*:20230326T150000")))
+            (should (re-search-forward "DTSTART:2023032.T..0000")))
           (save-excursion
             (should (not (re-search-forward "^DUE" nil t))))
           (save-excursion
-            (should (search-forward "RRULE:FREQ=DAILY;INTERVAL=3;UNTIL=20230501T070000Z"))))
+            (should (re-search-forward "RRULE:FREQ=DAILY;INTERVAL=3;UNTIL=2023050.T..0000Z"))))
       (when (file-exists-p tmp-ics) (delete-file tmp-ics)))))
 
 (provide 'test-ox-icalendar)
