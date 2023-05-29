@@ -795,10 +795,11 @@ Return VEVENT component as a string."
 	    (org-icalendar-convert-timestamp timestamp "DTSTART" nil timezone) "\n"
 	    (org-icalendar-convert-timestamp timestamp "DTEND" t timezone) "\n"
 	    ;; RRULE.
-	    (concat (org-icalendar--rrule
-                      (org-element-property :repeater-unit timestamp)
-                      (org-element-property :repeater-value timestamp))
-                     "\n")
+            (when (org-element-property :repeater-type timestamp)
+              (concat (org-icalendar--rrule
+                       (org-element-property :repeater-unit timestamp)
+                       (org-element-property :repeater-value timestamp))
+                      "\n"))
 	    "SUMMARY:" summary "\n"
 	    (and (org-string-nw-p location) (format "LOCATION:%s\n" location))
 	    (and (org-string-nw-p class) (format "CLASS:%s\n" class))
