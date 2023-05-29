@@ -752,39 +752,12 @@ inlinetask within the section."
        ;; Don't forget components from inner entries.
        contents))))
 
-(defun org-icalendar--rrule (unit value &optional until dtstart tz)
-  (concat
-   (format "RRULE:FREQ=%s;INTERVAL=%d"
-	   (cl-case unit
-	     (hour "HOURLY") (day "DAILY") (week "WEEKLY")
-	     (month "MONTHLY") (year "YEARLY"))
-	   value)
-   (when until
-     (let* ((with-time-p (org-element-property :minute-start dtstart))
-            ;; RFC5545 requires UTC iff DTSTART is not local time
-            (local-time-p (and (not tz)
-                               (equal org-icalendar-date-time-format
-                                      ":%Y%m%dT%H%M%S")))
-            (encoded
-             (org-encode-time
-              0
-              (if with-time-p (org-element-property :minute-start until) 0)
-              (if with-time-p (org-element-property :hour-start until) 0)
-              (org-element-property :day-start until)
-              (org-element-property :month-start until)
-              (org-element-property :year-start until)
-              nil nil
-              (unless (or local-time-p (not with-time-p))
-                (or tz org-icalendar-timezone)))))
-       (concat ";UNTIL="
-               (format-time-string
-                (cond
-                 ((not with-time-p) "%Y%m%d")
-                 (local-time-p "%Y%m%dT%H%M%S")
-                 "%Y%m%dT%H%M%SZ")
-                encoded
-                local-time-p))))
-   "\n"))
+(defun org-icalendar--rrule (unit value)
+  (format "RRULE:FREQ=%s;INTERVAL=%d"
+	  (cl-case unit
+	    (hour "HOURLY") (day "DAILY") (week "WEEKLY")
+	    (month "MONTHLY") (year "YEARLY"))
+	  value))
 
 (defun org-icalendar--vevent
     (entry timestamp uid summary location description categories timezone class)
@@ -812,9 +785,10 @@ Return VEVENT component as a string."
 	     (org-icalendar-convert-timestamp timestamp "DTSTART" nil timezone) "\n"
 	     (org-icalendar-convert-timestamp timestamp "DTEND" t timezone) "\n"
 	     ;; RRULE.
-             (org-icalendar--rrule
-              (org-element-property :repeater-unit timestamp)
-              (org-element-property :repeater-value timestamp))
+             (concat (org-icalendar--rrule
+                      (org-element-property :repeater-unit timestamp)
+                      (org-element-property :repeater-value timestamp))
+                     "\n")
 	     "SUMMARY:" summary "\n"
 	     (and (org-string-nw-p location) (format "LOCATION:%s\n" location))
 	     (and (org-string-nw-p class) (format "CLASS:%s\n" class))
@@ -908,8 +882,36 @@ different repeaters on SCHEDULED and DEADLINE. Skipping.")
 repeater on DEADLINE but not SCHEDULED. Skipping.")
                nil)
               ((or sc-repeat-p dl-repeat-p)
-               (org-icalendar--rrule repeat-unit repeat-value
-                                     repeat-until start timezone)))
+               (concat
+                (org-icalendar--rrule repeat-unit repeat-value)
+                ;; add UNTIL part to RRULE
+                (when repeat-until
+                  (let* ((start-time
+                          (org-element-property :minute-start start))
+                         ;; RFC5545 requires UTC iff DTSTART is not local time
+                         (local-time-p
+                          (and (not timezone)
+                               (equal org-icalendar-date-time-format
+                                      ":%Y%m%dT%H%M%S")))
+                         (encoded
+                          (org-encode-time
+                           0
+                           (or (org-element-property :minute-start repeat-until)
+                               0)
+                           (or (org-element-property :hour-start repeat-until)
+                               0)
+                           (org-element-property :day-start repeat-until)
+                           (org-element-property :month-start repeat-until)
+                           (org-element-property :year-start repeat-until))))
+                    (concat ";UNTIL="
+                            (cond
+                             ((not start-time)
+                              (format-time-string "%Y%m%d" encoded))
+                             (local-time-p
+                              (format-time-string "%Y%m%dT%H%M%S" encoded))
+                             (format-time-string "%Y%m%dT%H%M%SZ"
+                                                 encoded t)))))
+                "\n")))
 	     "SUMMARY:" summary "\n"
 	     (and (org-string-nw-p location) (format "LOCATION:%s\n" location))
 	     (and (org-string-nw-p class) (format "CLASS:%s\n" class))
