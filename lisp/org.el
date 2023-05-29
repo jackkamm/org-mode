@@ -3602,13 +3602,13 @@ following symbols:
 	       (const :tag "Entities" entities))))
 
 (defcustom org-hide-emphasis-markers nil
-  "Non-nil mean font-lock should hide the emphasis marker characters."
+  "Non-nil means font-lock should hide the emphasis marker characters."
   :group 'org-appearance
   :type 'boolean
   :safe #'booleanp)
 
 (defcustom org-hide-macro-markers nil
-  "Non-nil mean font-lock should hide the brackets marking macro calls."
+  "Non-nil means font-lock should hide the brackets marking macro calls."
   :group 'org-appearance
   :type 'boolean)
 
@@ -3620,7 +3620,7 @@ When nil, the \\name form remains in the buffer."
   :type 'boolean)
 
 (defcustom org-pretty-entities-include-sub-superscripts t
-  "Non-nil means, pretty entity display includes formatting sub/superscripts."
+  "Non-nil means pretty entity display includes formatting sub/superscripts."
   :group 'org-appearance
   :version "24.1"
   :type 'boolean)
@@ -5414,10 +5414,11 @@ by a #."
 	     beg end-of-endline '(font-lock-fontified t font-lock-multiline t))
 	    (org-remove-flyspell-overlays-in beg bol-after-beginline)
 	    (org-remove-flyspell-overlays-in nl-before-endline end-of-endline)
-	    (cond
-	     ((and lang (not (string= lang "")) org-src-fontify-natively)
+            (cond
+	     ((and org-src-fontify-natively
+                   (string= block-type "src"))
 	      (save-match-data
-                (org-src-font-lock-fontify-block lang block-start block-end))
+                (org-src-font-lock-fontify-block (or lang "") block-start block-end))
 	      (add-text-properties bol-after-beginline block-end '(src-block t)))
 	     (quoting
 	      (add-text-properties
@@ -10226,7 +10227,7 @@ nil."
 	(replace-match "")
         (if (and (string-match "\\S-" (buffer-substring (line-beginning-position) (point)))
 		 (equal (char-before) ?\ ))
-	    (backward-delete-char 1)
+	    (delete-char -1)
 	  (when (string-match "^[ \t]*$" (buffer-substring
                                           (line-beginning-position) (line-end-position)))
             (delete-region (line-beginning-position)
@@ -12017,18 +12018,17 @@ Returns the new tags string, or nil to not change the current settings."
 		    (setq current nil)
 		    (when exit-after-next (setq exit-after-next 'now)))
 		   ((= c ?\t)
-                    (condition-case nil
-                        (unless tab-tags
-                          (setq tab-tags
-                                (delq nil
-                                      (mapcar (lambda (x)
-                                                (let ((item (car-safe x)))
-                                                  (and (stringp item)
-                                                       (list item))))
-                                              (org--tag-add-to-alist
-                                               (with-current-buffer buf
-                                                 (org-get-buffer-tags))
-                                               table))))))
+                    (unless tab-tags
+                      (setq tab-tags
+                            (delq nil
+                                  (mapcar (lambda (x)
+                                            (let ((item (car-safe x)))
+                                              (and (stringp item)
+                                                   (list item))))
+                                          (org--tag-add-to-alist
+                                           (with-current-buffer buf
+                                             (org-get-buffer-tags))
+                                           table)))))
                     (setq tg (completing-read "Tag: " tab-tags))
 		    (when (string-match "\\S-" tg)
 		      (cl-pushnew (list tg) tab-tags :test #'equal)
@@ -15096,6 +15096,24 @@ This requires Emacs >= 24.1, built with imagemagick support."
 	  (list :tag "Use #+ATTR* or a number of pixels" (integer))
 	  (const :tag "Use #+ATTR* or don't resize" nil)))
 
+(defcustom org-image-max-width 'fill-column
+  "When non-nil, limit the displayed image width.
+This setting only takes effect when `org-image-actual-width' is set to
+t or when #+ATTR* is set to t.
+
+Possible values:
+- `fill-column' :: limit width to `fill-column'
+- `window'      :: limit width to window width
+- number        :: limit width to number in pixels
+- nil             :: do not limit image width"
+  :group 'org-appearance
+  :package-version '(Org . "9.7")
+  :type '(choice
+          (const :tag "Do not limit image width" nil)
+          (const :tag "Limit to `fill-column'" fill-column)
+          (const :tag "Limit to window width" window)
+          (integer :tag "Limit to a number of pixels")))
+
 (defcustom org-agenda-inhibit-startup nil
   "Inhibit startup when preparing agenda buffers.
 When this variable is t, the initialization of the Org agenda
@@ -16229,7 +16247,16 @@ according to the value of `org-display-remote-inline-images'."
 			 width
 			 'imagemagick)
 		    remote?
-		    :width width :scale 1))))
+		    :width width
+                    :max-width
+                    (pcase org-image-max-width
+                      (`fill-column (* fill-column (frame-char-width (selected-frame))))
+                      (`window (window-width nil t))
+                      ((pred integerp) org-image-max-width)
+                      (`nil nil)
+                      (_ (error "Unsupported value of `org-image-max-width': %S"
+                                org-image-max-width)))
+                    :scale 1))))
 
 (defun org-display-inline-images (&optional include-linked refresh beg end)
   "Display inline images.
@@ -16530,7 +16557,7 @@ because, in this case the deletion might narrow the column."
 	     (looking-at-p ".*?|")
 	     (org-at-table-p))
 	(progn (forward-char -1) (org-delete-char 1))
-      (backward-delete-char N)
+      (funcall-interactively #'backward-delete-char N)
       (org-fix-tags-on-the-fly))))
 
 (defun org-delete-char (N)
@@ -16921,7 +16948,9 @@ for more information."
     (let ((beg (region-beginning))
           (end (region-end)))
       (save-excursion
-        (goto-char end)
+        ;; Go a little earlier because `org-move-subtree-down' will
+        ;; insert before markers and we may overshoot in some cases.
+        (goto-char (max beg (1- end)))
         (setq end (point-marker))
         (goto-char beg)
         (let ((level (org-current-level)))

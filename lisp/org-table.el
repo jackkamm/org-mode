@@ -4332,14 +4332,8 @@ extension of the given file name, and finally on the variable
 		(table (org-table-to-lisp)))
 	    (unless (fboundp transform)
 	      (user-error "No such transformation function %s" transform))
-	    (let (buf)
-	      (with-current-buffer (find-file-noselect file)
-		(setq buf (current-buffer))
-		(erase-buffer)
-		(fundamental-mode)
-		(insert (funcall transform table params) "\n")
-		(save-buffer))
-	      (kill-buffer buf))
+            (with-temp-file file
+              (insert (funcall transform table params) "\n"))
 	    (message "Export done."))
 	(user-error "TABLE_EXPORT_FORMAT invalid")))))
 
@@ -5414,12 +5408,10 @@ overwritten, and the table is not marked as requiring realignment."
 	(self-insert-command N))
     (setq org-table-may-need-update t)
     (let* (orgtbl-mode
-	   a
 	   (cmd (or (key-binding
 		     (or (and (listp function-key-map)
-			      (setq a (assoc last-input-event function-key-map))
-			      (cdr a))
-			 (vector last-input-event)))
+			      (cdr (assoc last-command-event function-key-map)))
+			 (vector last-command-event)))
 		    'self-insert-command)))
       (call-interactively cmd)
       (if (and org-self-insert-cluster-for-undo

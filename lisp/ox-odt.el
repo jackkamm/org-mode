@@ -148,6 +148,10 @@
 
 ;;; Internal Variables
 
+(defvar org-odt--id-attr-prefix "ID-"
+  "Prefix to use in ID attributes.
+This affects IDs that are determined from the ID property.")
+
 (defconst org-odt-lib-dir
   (file-name-directory (or load-file-name (buffer-file-name)))
   "Location of ODT exporter.
@@ -1009,7 +1013,7 @@ See `org-odt--build-date-styles' for implementation details."
 	      (setq exit-code (archive-zip-extract archive member))
 	      (buffer-string)))
       (unless (zerop exit-code)
-	(message command-output)
+	(warn command-output)
 	(error "Extraction failed")))))
 
 ;;;; Target
@@ -1365,50 +1369,40 @@ original parsed data.  INFO is a plist holding export options."
     ;; Ensure we have write permissions to this file.
     (set-file-modes (concat org-odt-zip-dir "styles.xml") #o600)
 
-    ;; FIXME: Who is opening an empty styles.xml before this point?
-    (with-current-buffer
-	(find-file-noselect (concat org-odt-zip-dir "styles.xml") t)
-      (revert-buffer t t)
+    (let ((styles-xml (concat org-odt-zip-dir "styles.xml")))
+      (with-temp-buffer
+        (when (file-exists-p styles-xml)
+          (insert-file-contents styles-xml))
+        
+        ;; Write custom styles for source blocks
+        ;; Save STYLES used for colorizing of source blocks.
+        ;; Update styles.xml with styles that were collected as part of
+        ;; `org-odt-hfy-face-to-css' callbacks.
+        (let ((styles (mapconcat (lambda (style) (format " %s\n" (cddr style)))
+			         hfy-user-sheet-assoc "")))
+          (when styles
+	    (goto-char (point-min))
+	    (when (re-search-forward "</office:styles>" nil t)
+	      (goto-char (match-beginning 0))
+	      (insert "\n<!-- Org Htmlfontify Styles -->\n" styles "\n"))))
 
-      ;; Write custom styles for source blocks
-      ;; Save STYLES used for colorizing of source blocks.
-      ;; Update styles.xml with styles that were collected as part of
-      ;; `org-odt-hfy-face-to-css' callbacks.
-      (let ((styles (mapconcat (lambda (style) (format " %s\n" (cddr style)))
-			       hfy-user-sheet-assoc "")))
-	(when styles
-	  (goto-char (point-min))
-	  (when (re-search-forward "</office:styles>" nil t)
-	    (goto-char (match-beginning 0))
-	    (insert "\n<!-- Org Htmlfontify Styles -->\n" styles "\n"))))
+        ;; Update styles.xml - take care of outline numbering
+        ;; Outline numbering is retained only up to LEVEL.
+        ;; To disable outline numbering pass a LEVEL of 0.
 
-      ;; Update styles.xml - take care of outline numbering
-
-      ;; Don't make automatic backup of styles.xml file. This setting
-      ;; prevents the backed-up styles.xml file from being zipped in to
-      ;; odt file. This is more of a hackish fix. Better alternative
-      ;; would be to fix the zip command so that the output odt file
-      ;; includes only the needed files and excludes any auto-generated
-      ;; extra files like backups and auto-saves etc etc. Note that
-      ;; currently the zip command zips up the entire temp directory so
-      ;; that any auto-generated files created under the hood ends up in
-      ;; the resulting odt file.
-      (setq-local backup-inhibited t)
-
-      ;; Outline numbering is retained only up to LEVEL.
-      ;; To disable outline numbering pass a LEVEL of 0.
-
-      (goto-char (point-min))
-      (let ((regex
-	     "<text:outline-level-style\\([^>]*\\)text:level=\"\\([^\"]*\\)\"\\([^>]*\\)>")
-	    (replacement
-	     "<text:outline-level-style\\1text:level=\"\\2\" style:num-format=\"\">"))
-	(while (re-search-forward regex nil t)
-	  (unless (let ((sec-num (plist-get info :section-numbers))
-			(level (string-to-number (match-string 2))))
-		    (if (wholenump sec-num) (<= level sec-num) sec-num))
-	    (replace-match replacement t nil))))
-      (save-buffer 0)))
+        (let ((regex
+	       "<text:outline-level-style\\([^>]*\\)text:level=\"\\([^\"]*\\)\"\\([^>]*\\)>")
+	      (replacement
+	       "<text:outline-level-style\\1text:level=\"\\2\" style:num-format=\"\">"))
+          (goto-char (point-min))
+          (while (re-search-forward regex nil t)
+	    (unless (let ((sec-num (plist-get info :section-numbers))
+		          (level (string-to-number (match-string 2))))
+		      (if (wholenump sec-num) (<= level sec-num) sec-num))
+	      (replace-match replacement t nil))))
+        
+        ;; Write back the new contents.
+        (write-region nil nil styles-xml))))
   ;; Update content.xml.
 
   (let* ( ;; `org-display-custom-times' should be accessed right
@@ -1785,7 +1779,7 @@ holding contextual information."
 	   ;; Extra targets.
 	   (extra-targets
 	    (let ((id (org-element-property :ID headline)))
-	      (if id (org-odt--target "" (concat "ID-" id)) "")))
+	      (if id (org-odt--target "" (concat org-odt--id-attr-prefix id)) "")))
 	   ;; Title.
 	   (anchored-title (org-odt--target full-text id)))
       (cond
@@ -2923,17 +2917,23 @@ contextual information."
       ;; not be desired in scripts that do not separate words with
       ;; spaces (for example, Han script).  `fill-region' is able to
       ;; handle such situations.
-      ;; FIXME: The unnecessary spaced may still remain when a newline
+      ;; FIXME: The unnecessary spacing may still remain when a newline
       ;; is at a boundary between Org objects (e.g. italics markup
       ;; followed by newline).
       (setq output
             (with-temp-buffer
-              (insert output)
               (save-match-data
                 (let ((leading (and (string-match (rx bos (1+ blank)) output)
                                     (match-string 0 output)))
                       (trailing (and (string-match (rx (1+ blank) eos) output)
                                      (match-string 0 output))))
+                  (insert
+                   (substring
+                    output
+                    (length leading)
+                    (pcase (length trailing)
+                      (0 nil)
+                      (n (- n)))))
                   ;; Unfill, retaining leading/trailing space.
                   (let ((fill-column most-positive-fixnum))
                     (fill-region (point-min) (point-max)))
@@ -3413,7 +3413,7 @@ contextual information."
     ;; such tables from export.
     (table.el
      (prog1 nil
-       (message
+       (warn
 	(concat
 	 "(ox-odt): Found table.el-type table in the source Org file."
 	 "  table.el doesn't support export to ODT format."
@@ -3720,16 +3720,16 @@ contextual information."
        (if (and (fboundp 'org-format-latex-mathml-available-p)
 		(org-format-latex-mathml-available-p))
 	   (setq processing-type 'mathml)
-	 (message "LaTeX to MathML converter not available.")
+	 (warn "LaTeX to MathML converter not available.  Falling back to verbatim.")
 	 (setq processing-type 'verbatim)))
       ((dvipng imagemagick)
        (unless (and (org-check-external-command "latex" "" t)
 		    (org-check-external-command
 		     (if (eq processing-type 'dvipng) "dvipng" "convert") "" t))
-	 (message "LaTeX to PNG converter not available.")
+	 (warn "LaTeX to PNG converter not available.  Falling back to verbatim.")
 	 (setq processing-type 'verbatim)))
       (otherwise
-       (message "Unknown LaTeX option.  Forcing verbatim.")
+       (warn "Unknown LaTeX option.  Forcing verbatim.")
        (setq processing-type 'verbatim)))
 
     ;; Store normalized value for later use.
@@ -4089,8 +4089,8 @@ contextual information."
        (error
 	;; Cleanup work directory and work files.
 	(funcall --cleanup-xml-buffers)
-	(message "OpenDocument export failed: %s"
-		 (error-message-string err))))))
+	(warn "OpenDocument export failed: %s"
+	      (error-message-string err))))))
 
 
 ;;;; Export to OpenDocument formula
