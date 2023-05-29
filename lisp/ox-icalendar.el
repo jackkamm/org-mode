@@ -853,7 +853,7 @@ Return VTODO component as a string."
                          'deadline-warning)
                      dl)
                 (and (eq org-icalendar-todo-unscheduled-start
-                         'repeating-deadline-warning)
+                         'recurring-deadline-warning)
                      dl-repeat-p))
             (let ((dl-raw (org-element-property :raw-value dl)))
               (with-temp-buffer
