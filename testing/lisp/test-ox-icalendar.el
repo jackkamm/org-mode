@@ -114,5 +114,19 @@ DEADLINE: <2023-05-02 Tue> SCHEDULED: <2023-03-26 Sun 15:00 +3d>"
             (should (re-search-forward "RRULE:FREQ=DAILY;INTERVAL=3;UNTIL=2023050.T..0000Z"))))
       (when (file-exists-p tmp-ics) (delete-file tmp-ics)))))
 
+(ert-deftest test-ox-icalendar/warn-unsupported-repeater ()
+  "Test warning is emitted for unsupported repeater type."
+  (let ((org-icalendar-include-todo 'all))
+    (should
+     (member
+      "Repeater-type restart not currently supported by iCalendar export"
+      (org-test-capture-warnings
+       (let ((tmp-ics (org-test-with-temp-text-in-file
+                       "* TODO Unsupported restart repeater
+SCHEDULED: <2023-03-26 Sun .+1m>"
+                       (expand-file-name (org-icalendar-export-to-ics)))))
+         (when (file-exists-p tmp-ics)
+           (delete-file tmp-ics))))))))
+
 (provide 'test-ox-icalendar)
 ;;; test-ox-icalendar.el ends here

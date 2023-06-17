@@ -810,6 +810,23 @@ Return VEVENT component as a string."
 	    (org-icalendar--valarm entry timestamp summary)
 	    "END:VEVENT")))
 
+(defun org-icalendar--repeater-type (elem)
+  "Return ELEM's repeater-type if supported, else warn and return nil."
+  (let ((repeater-value (org-element-property :repeater-value elem))
+        (repeater-type (org-element-property :repeater-type elem)))
+    (cond
+     ((not (and repeater-type
+                repeater-value
+                (> repeater-value 0)))
+      nil)
+     ;; TODO Add catch-up to supported repeaters (use EXDATE to implement)
+     ((not (memq repeater-type '(cumulate)))
+      (org-display-warning
+       (format "Repeater-type %s not currently supported by iCalendar export"
+               (symbol-name repeater-type)))
+      nil)
+     (repeater-type))))
+
 (defun org-icalendar--vtodo
     (entry uid summary location description categories timezone class)
   "Create a VTODO component.
@@ -826,13 +843,8 @@ Return VTODO component as a string."
 		  (org-element-property :scheduled entry)))
          (dl (and (memq 'todo-due org-icalendar-use-deadline)
                   (org-element-property :deadline entry)))
-         ;; TODO Implement catch-up repeaters using EXDATE
-         (sc-repeat-p (and (eq (org-element-property :repeater-type sc)
-                               'cumulate)
-                           (> (org-element-property :repeater-value sc) 0)))
-         (dl-repeat-p (and (eq (org-element-property :repeater-type dl)
-                               'cumulate)
-                           (> (org-element-property :repeater-value dl) 0)))
+         (sc-repeat-p (org-icalendar--repeater-type sc))
+         (dl-repeat-p (org-icalendar--repeater-type dl))
          (repeat-value (or (org-element-property :repeater-value sc)
                            (org-element-property :repeater-value dl)))
          (repeat-unit (or (org-element-property :repeater-unit sc)
@@ -881,14 +893,14 @@ Return VTODO component as a string."
                              (eq repeat-unit (org-element-property
                                               :repeater-unit dl)))))
               ;; TODO Implement via RDATE with changing DURATION
-              (warn "Not yet implemented: \
+              (org-display-warning "Not yet implemented: \
 different repeaters on SCHEDULED and DEADLINE. Skipping.")
               nil)
              ;; DEADLINE has repeater but SCHEDULED doesn't
              ((and dl-repeat-p (and sc (not sc-repeat-p)))
               ;; TODO SCHEDULED should only apply to first instance;
               ;; use RDATE with custom DURATION to implement that
-              (warn "Not yet implemented: \
+              (org-display-warning "Not yet implemented: \
 repeater on DEADLINE but not SCHEDULED. Skipping.")
               nil)
              ((or sc-repeat-p dl-repeat-p)
