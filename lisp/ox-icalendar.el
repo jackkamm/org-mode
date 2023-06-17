@@ -168,8 +168,9 @@ This is a list with possibly several symbols in it.  Valid symbols are:
 
 `todo-start'
 
-  Scheduling time stamps in TODO entries become start date.  Some
-  calendar applications show TODO entries only after that date."
+  Scheduling time stamps in TODO entries become start date.  (See
+  also `org-icalendar-todo-unscheduled-start', which controls the
+  start date for TODO entries without a scheduling time stamp)"
   :group 'org-export-icalendar
   :type
   '(set :greedy t
