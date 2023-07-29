@@ -441,7 +441,6 @@ last statement in BODY, as elisp."
       results
       (org-babel-python-table-or-string results))))
 
-;; TODO Implement graphics-file
 (defun org-babel-python-async-evaluate-session
     (session body &optional result-type result-params graphics-file)
   "Asynchronously evaluate BODY in SESSION.
@@ -457,7 +456,8 @@ by `org-babel-comint-async-filter'."
        (with-temp-buffer
          (insert (format org-babel-python-async-indicator "start" uuid))
          (insert "\n")
-         (insert body)
+         (insert (org-babel-python--output-graphics-wrapper
+	          body graphics-file))
          (insert "\n")
          (insert (format org-babel-python-async-indicator "end" uuid))
          (let ((python-shell-buffer-name
@@ -465,17 +465,20 @@ by `org-babel-comint-async-filter'."
            (python-shell-send-buffer)))
        uuid))
     (`value
-     (let ((tmp-results-file (org-babel-temp-file "python-"))
+     (let ((results-file (or graphics-file
+			     (org-babel-temp-file "python-")))
            (tmp-src-file (org-babel-temp-file "python-")))
        (with-temp-file tmp-src-file (insert body))
        (with-temp-buffer
-         (insert (org-babel-python-format-session-value tmp-src-file tmp-results-file result-params))
+         (insert (org-babel-python-format-session-value
+                  tmp-src-file results-file result-params))
          (insert "\n")
-         (insert (format org-babel-python-async-indicator "file" tmp-results-file))
+         (unless graphics-file
+           (insert (format org-babel-python-async-indicator "file" results-file)))
          (let ((python-shell-buffer-name
                 (org-babel-python-without-earmuffs session)))
            (python-shell-send-buffer)))
-       tmp-results-file))))
+       results-file))))
 
 (provide 'ob-python)
 
