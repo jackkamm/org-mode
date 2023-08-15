@@ -551,9 +551,11 @@ invoking a capture template with a zero prefix.
 
 *** =ob-python.el=: Support for more result types and plotting
 
-=ob-python= now recognizes dictionaries, numpy arrays, and pandas
-dataframes/series, and will convert them to org-mode tables when
-appropriate.
+=ob-python= now recognizes numpy arrays, and pandas dataframes/series,
+and will convert them to org-mode tables when appropriate.
+
+In addition, dict results are now returned in appropriate string form,
+instead of being mangled as they were previously.
 
 When the header argument =:results graphics= is set, =ob-python= will
 use matplotlib to save graphics. The behavior depends on whether value
