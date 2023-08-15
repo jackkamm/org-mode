@@ -70,7 +70,8 @@ This function is called by `org-babel-execute-src-block'."
 	      org-babel-python-command))
 	 (session (org-babel-python-initiate-session
 		   (cdr (assq :session params))))
-	 (graphics-file (org-babel-graphical-output-file params))
+	 (graphics-file (and (member "graphics" (assq :result-params params))
+			     (org-babel-graphical-output-file params)))
          (result-params (cdr (assq :result-params params)))
          (result-type (cdr (assq :result-type params)))
 	 (return-val (when (eq result-type 'value)
