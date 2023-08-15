@@ -82,13 +82,13 @@ This function is called by `org-babel-execute-src-block'."
 	  (concat
            (when (and graphics-file (eq result-type 'output))
              "\
-import matplotlib.pyplot as __org_babel_python_plt
-__org_babel_python_plt.gcf().clear()\n")
+import matplotlib.pyplot
+matplotlib.pyplot.gcf().clear()\n")
 	   (org-babel-expand-body:generic
 	    body params
 	    (org-babel-variable-assignments:python params))
            (when (and graphics-file (eq result-type 'output))
-             (format "\n__org_babel_python_plt.savefig('%s')" graphics-file))
+             (format "\nmatplotlib.pyplot.savefig('%s')" graphics-file))
 	   (when return-val
 	     (format (if session "\n%s" "\nreturn %s") return-val))))
          (result (org-babel-python-evaluate
@@ -240,21 +240,21 @@ def __org_babel_python_format_value(result, result_file, result_params):
             if not set(result_params).intersection(\
 ['scalar', 'verbatim', 'raw']):
                 try:
-                    import pandas as pd
+                    import pandas
                 except ImportError:
                     pass
                 else:
-                    if isinstance(result, pd.DataFrame):
+                    if isinstance(result, pandas.DataFrame):
                         result = [[''] + list(result.columns), None] + \
 [[i] + list(row) for i, row in result.iterrows()]
-                    elif isinstance(result, pd.Series):
+                    elif isinstance(result, pandas.Series):
                         result = list(result.items())
                 try:
-                    import numpy as np
+                    import numpy
                 except ImportError:
                     pass
                 else:
-                    if isinstance(result, np.ndarray):
+                    if isinstance(result, numpy.ndarray):
                         result = result.tolist()
             f.write(str(result))"
   "Python function to format value result and save it to file.")
