@@ -274,22 +274,6 @@ __org_babel_python_plt.gcf().clear()
 __org_babel_python_plt.savefig('%s')" body graphics-file)
     body))
 
-(defconst org-babel-python--nonsession-value-wrapper
-  (concat org-babel-python--def-format-value "
-def main():
-%s
-
-__org_babel_python_format_value(main(), '%s', %s)")
-  "TODO")
-
-(defconst org-babel-python--session-output-wrapper "\
-with open('%s') as f:
-    exec(compile(f.read(), f.name, 'exec'))"
-  "Wrapper for session block with output results.
-
-Has a single %s escape, the tempfile containing the source code
-to evaluate.")
-
 (defun org-babel-python-format-session-value
     (src-file result-file result-params)
   "Return Python code to evaluate SRC-FILE and write result to RESULT-FILE."
@@ -356,7 +340,11 @@ last statement in BODY, as elisp."
 		      (concat
 		       preamble (and preamble "\n")
 		       (format
-			org-babel-python--nonsession-value-wrapper
+			(concat org-babel-python--def-format-value "
+def main():
+%s
+
+__org_babel_python_format_value(main(), '%s', %s)")
                         (org-babel-python--shift-right body)
 			(org-babel-process-file-name results-file 'noquote)
 			(org-babel-python-var-to-python result-params))))
@@ -407,7 +395,9 @@ last statement in BODY, as elisp."
                        body graphics-file)))
             (pcase result-type
 	      (`output
-	       (let ((body (format org-babel-python--session-output-wrapper
+	       (let ((body (format "\
+with open('%s') as f:
+    exec(compile(f.read(), f.name, 'exec'))"
 				   (org-babel-process-file-name
 				    tmp-src-file 'noquote))))
 		 (org-babel-python-send-string session body)))
