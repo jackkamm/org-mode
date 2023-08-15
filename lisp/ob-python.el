@@ -267,7 +267,7 @@ def __org_babel_python_format_value(result, result_file, result_params):
                     if isinstance(result, np.ndarray):
                         result = result.tolist()
             f.write(str(result))"
-  "TODO")
+  "Python function to format value result and save it to file.")
 
 (defun org-babel-python-format-session-value
     (src-file result-file result-params)
