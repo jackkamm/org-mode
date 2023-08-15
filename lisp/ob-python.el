@@ -402,14 +402,14 @@ last statement in BODY, as elisp."
   (let* ((tmp-src-file (org-babel-temp-file "python-"))
          (results
 	  (progn
-	    (with-temp-file tmp-src-file (insert body))
+	    (with-temp-file tmp-src-file
+              (insert (org-babel-python--output-graphics-wrapper
+                       body graphics-file)))
             (pcase result-type
 	      (`output
-	       (let ((body (org-babel-python--output-graphics-wrapper
-			       (format org-babel-python--session-output-wrapper
-				       (org-babel-process-file-name
-					tmp-src-file 'noquote))
-			       graphics-file)))
+	       (let ((body (format org-babel-python--session-output-wrapper
+				   (org-babel-process-file-name
+				    tmp-src-file 'noquote))))
 		 (org-babel-python-send-string session body)))
               (`value
                (let* ((results-file (or graphics-file
