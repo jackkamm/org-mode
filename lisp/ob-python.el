@@ -80,15 +80,9 @@ This function is called by `org-babel-execute-src-block'."
 	 (async (org-babel-comint-use-async params))
          (full-body
 	  (concat
-           (when (and graphics-file (eq result-type 'output))
-             "\
-import matplotlib.pyplot
-matplotlib.pyplot.gcf().clear()\n")
 	   (org-babel-expand-body:generic
 	    body params
 	    (org-babel-variable-assignments:python params))
-           (when (and graphics-file (eq result-type 'output))
-             (format "\nmatplotlib.pyplot.savefig('%s')" graphics-file))
 	   (when return-val
 	     (format (if session "\n%s" "\nreturn %s") return-val))))
          (result (org-babel-python-evaluate
@@ -228,6 +222,15 @@ then create.  Return the initialized session."
 (defvar org-babel-python-eoe-indicator "org_babel_python_eoe"
   "A string to indicate that evaluation has completed.")
 
+(defconst org-babel-python--output-graphics-wrapper "\
+import matplotlib.pyplot
+matplotlib.pyplot.gcf().clear()
+%s
+matplotlib.pyplot.savefig('%s')"
+  "Format string for saving Python graphical output.
+Has two %s escapes, for the Python code to be evaluated, and the
+file to save the graphics to.")
+
 (defconst org-babel-python--def-format-value "\
 def __org_babel_python_format_value(result, result_file, result_params):
     with open(result_file, 'w') as f:
@@ -310,13 +313,17 @@ __org_babel_python_format_value(__org_babel_python_final, '%s', %s)"
     (body &optional result-type result-params preamble graphics-file)
   "Evaluate BODY in external python process.
 If RESULT-TYPE equals `output' then return standard output as a
-string.  If RESULT-TYPE equals `value' then return the value of the
-last statement in BODY, as elisp."
+string.  If RESULT-TYPE equals `value' then return the value of
+the last statement in BODY, as elisp.  If GRAPHICS-FILE is
+non-nil, then save graphical results to that file instead."
   (let ((raw
          (pcase result-type
            (`output (org-babel-eval org-babel-python-command
 				    (concat preamble (and preamble "\n")
-                                            body)))
+                                            (if graphics-file
+                                                (format org-babel-python--output-graphics-wrapper
+                                                        body graphics-file)
+                                              body))))
            (`value (let ((results-file (or graphics-file
 				           (org-babel-temp-file "python-"))))
 		     (org-babel-eval
@@ -369,13 +376,17 @@ finally:
     (session body &optional result-type result-params graphics-file)
   "Pass BODY to the Python process in SESSION.
 If RESULT-TYPE equals `output' then return standard output as a
-string.  If RESULT-TYPE equals `value' then return the value of the
-last statement in BODY, as elisp."
+string.  If RESULT-TYPE equals `value' then return the value of
+the last statement in BODY, as elisp.  If GRAPHICS-FILE is
+non-nil, then save graphical results to that file instead."
   (let* ((tmp-src-file (org-babel-temp-file "python-"))
          (results
 	  (progn
 	    (with-temp-file tmp-src-file
-              (insert body))
+              (insert (if (and graphics-file (eq result-type 'output))
+                          (format org-babel-python--output-graphics-wrapper
+                                  body graphics-file)
+                        body)))
             (pcase result-type
 	      (`output
 	       (let ((body (format "\
@@ -429,7 +440,10 @@ by `org-babel-comint-async-filter'."
        (with-temp-buffer
          (insert (format org-babel-python-async-indicator "start" uuid))
          (insert "\n")
-         (insert body)
+         (insert (if graphics-file
+                     (format org-babel-python--output-graphics-wrapper
+                             body graphics-file)
+                   body))
          (insert "\n")
          (insert (format org-babel-python-async-indicator "end" uuid))
          (let ((python-shell-buffer-name
