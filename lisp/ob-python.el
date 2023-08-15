@@ -70,8 +70,7 @@ This function is called by `org-babel-execute-src-block'."
 	      org-babel-python-command))
 	 (session (org-babel-python-initiate-session
 		   (cdr (assq :session params))))
-	 (graphics-file (and (member "graphics" (assq :result-params params))
-			     (org-babel-graphical-output-file params)))
+	 (graphics-file (org-babel-graphical-output-file params))
          (result-params (cdr (assq :result-params params)))
          (result-type (cdr (assq :result-type params)))
 	 (return-val (when (eq result-type 'value)
@@ -80,9 +79,15 @@ This function is called by `org-babel-execute-src-block'."
 	 (async (org-babel-comint-use-async params))
          (full-body
 	  (concat
+           (when (and graphics-file (eq result-type 'output))
+             "\
+import matplotlib.pyplot as __org_babel_python_plt
+__org_babel_python_plt.gcf().clear()\n")
 	   (org-babel-expand-body:generic
 	    body params
 	    (org-babel-variable-assignments:python params))
+           (when (and graphics-file (eq result-type 'output))
+             (format "\n__org_babel_python_plt.savefig('%s')" graphics-file))
 	   (when return-val
 	     (format (if session "\n%s" "\nreturn %s") return-val))))
          (result (org-babel-python-evaluate
@@ -261,18 +266,8 @@ def __org_babel_python_format_value(result, result_file, result_params):
                 else:
                     if isinstance(result, np.ndarray):
                         result = result.tolist()
-            f.write(str(result))")
-
-(defun org-babel-python--output-graphics-wrapper
-    (body graphics-file)
-  "Wrap BODY to plot to GRAPHICS-FILE if it is non-nil."
-  (if graphics-file
-      (format "\
-import matplotlib.pyplot as __org_babel_python_plt
-__org_babel_python_plt.gcf().clear()
-%s
-__org_babel_python_plt.savefig('%s')" body graphics-file)
-    body))
+            f.write(str(result))"
+  "TODO")
 
 (defun org-babel-python-format-session-value
     (src-file result-file result-params)
@@ -331,8 +326,7 @@ last statement in BODY, as elisp."
          (pcase result-type
            (`output (org-babel-eval org-babel-python-command
 				    (concat preamble (and preamble "\n")
-					    (org-babel-python--output-graphics-wrapper
-					     body graphics-file))))
+                                            body)))
            (`value (let ((results-file (or graphics-file
 				           (org-babel-temp-file "python-"))))
 		     (org-babel-eval
@@ -391,8 +385,7 @@ last statement in BODY, as elisp."
          (results
 	  (progn
 	    (with-temp-file tmp-src-file
-              (insert (org-babel-python--output-graphics-wrapper
-                       body graphics-file)))
+              (insert body))
             (pcase result-type
 	      (`output
 	       (let ((body (format "\
@@ -446,8 +439,7 @@ by `org-babel-comint-async-filter'."
        (with-temp-buffer
          (insert (format org-babel-python-async-indicator "start" uuid))
          (insert "\n")
-         (insert (org-babel-python--output-graphics-wrapper
-	          body graphics-file))
+         (insert body)
          (insert "\n")
          (insert (format org-babel-python-async-indicator "end" uuid))
          (let ((python-shell-buffer-name
