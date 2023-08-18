@@ -173,6 +173,13 @@ Emacs-lisp table, otherwise return the results as a string."
 
 (defvar-local org-babel-python--initialized nil
   "Flag used to mark that python session has been initialized.")
+(defun org-babel-python--setup-session ()
+  "Babel Python session setup code, to be run once per session.
+Function should be run from within the Python session buffer.
+This is often run as a part of `python-shell-first-prompt-hook',
+unless the Python session was created outside Org."
+  (python-shell-send-string-no-output org-babel-python--def-format-value)
+  (setq-local org-babel-python--initialized t))
 (defun org-babel-python-initiate-session-by-key (&optional session)
   "Initiate a python session.
 If there is not a current inferior-process-buffer in SESSION
@@ -189,23 +196,26 @@ then create.  Return the initialized session."
            (existing-session-p (comint-check-proc py-buffer)))
       (run-python cmd)
       (with-current-buffer py-buffer
-        ;; Adding to `python-shell-first-prompt-hook' immediately
-        ;; after `run-python' should be safe from race conditions,
-        ;; because subprocess output only arrives when Emacs is
-        ;; waiting (see elisp manual, "Output from Processes")
-        (add-hook
-         'python-shell-first-prompt-hook
-         (lambda () (setq-local org-babel-python--initialized t))
-         nil 'local))
-      ;; Don't hang if session was started externally
-      (unless existing-session-p
-        ;; Wait until Python initializes
-        ;; This is more reliable compared to
-        ;; `org-babel-comint-wait-for-output' as python may emit
-        ;; multiple prompts during initialization.
-        (with-current-buffer py-buffer
-          (while (not org-babel-python--initialized)
-            (org-babel-comint-wait-for-output py-buffer))))
+        (if existing-session-p
+            ;; Session was created outside Org.  Assume first prompt
+            ;; already happened; run session setup code directly
+            (unless org-babel-python--initialized
+              (org-babel-python--setup-session))
+          ;; Adding to `python-shell-first-prompt-hook' immediately
+          ;; after `run-python' should be safe from race conditions,
+          ;; because subprocess output only arrives when Emacs is
+          ;; waiting (see elisp manual, "Output from Processes")
+          (add-hook
+           'python-shell-first-prompt-hook
+           #'org-babel-python--setup-session
+           nil 'local)))
+      ;; Wait until Python initializes
+      ;; This is more reliable compared to
+      ;; `org-babel-comint-wait-for-output' as python may emit
+      ;; multiple prompts during initialization.
+      (with-current-buffer py-buffer
+        (while (not org-babel-python--initialized)
+          (org-babel-comint-wait-for-output py-buffer)))
       (setq org-babel-python-buffers
 	    (cons (cons session py-buffer)
 		  (assq-delete-all session org-babel-python-buffers)))
@@ -255,10 +265,10 @@ def __org_babel_python_format_value(result, result_file, result_params):
                 except ImportError:
                     pass
                 else:
-                    if isinstance(result, pandas.DataFrame):
-                        result = [[''] + list(result.columns), None] + \
-[[i] + list(row) for i, row in result.iterrows()]
-                    elif isinstance(result, pandas.Series):
+                    if isinstance(result, pandas.DataFrame) and 'table' in result_params:
+                        result = [[result.index.name or ''] + list(result.columns)] + \
+[None] + [[i] + list(row) for i, row in result.iterrows()]
+                    elif isinstance(result, pandas.Series) and 'table' in result_params:
                         result = list(result.items())
                 try:
                     import numpy
@@ -266,15 +276,17 @@ def __org_babel_python_format_value(result, result_file, result_params):
                     pass
                 else:
                     if isinstance(result, numpy.ndarray):
-                        result = result.tolist()
+                        if 'table' in result_params:
+                            result = result.tolist()
+                        else:
+                            result = repr(result)
             f.write(str(result))"
   "Python function to format value result and save it to file.")
 
 (defun org-babel-python-format-session-value
     (src-file result-file result-params)
   "Return Python code to evaluate SRC-FILE and write result to RESULT-FILE."
-  (concat org-babel-python--def-format-value
-	  (format "
+  (format "
 import ast
 with open('%s') as __org_babel_python_tmpfile:
     __org_babel_python_ast = ast.parse(__org_babel_python_tmpfile.read())
@@ -288,9 +300,9 @@ else:
     exec(compile(__org_babel_python_ast, '<string>', 'exec'))
     __org_babel_python_final = None
 __org_babel_python_format_value(__org_babel_python_final, '%s', %s)"
-		  (org-babel-process-file-name src-file 'noquote)
-		  (org-babel-process-file-name result-file 'noquote)
-		  (org-babel-python-var-to-python result-params))))
+	  (org-babel-process-file-name src-file 'noquote)
+	  (org-babel-process-file-name result-file 'noquote)
+	  (org-babel-python-var-to-python result-params)))
 
 (defun org-babel-python-evaluate
     (session body &optional result-type result-params preamble async graphics-file)
@@ -350,7 +362,7 @@ __org_babel_python_format_value(main(), '%s', %s)")
 		     (org-babel-eval-read-file results-file))))))
     (org-babel-result-cond result-params
       raw
-      (org-babel-python-table-or-string (org-trim raw)))))
+      (org-babel-python-table-or-string raw))))
 
 (defun org-babel-python-send-string (session body)
   "Pass BODY to the Python process in SESSION.
