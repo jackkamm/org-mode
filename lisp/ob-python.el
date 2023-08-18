@@ -237,6 +237,8 @@ def __org_babel_python_format_value(result, result_file, result_params):
         elif 'pp' in result_params:
             import pprint
             f.write(pprint.pformat(result))
+        elif 'list' in result_params and isinstance(result, dict):
+            f.write(str(['{} :: {}'.format(k, v) for k, v in result.items()]))
         else:
             if not set(result_params).intersection(\
 ['scalar', 'verbatim', 'raw']):
