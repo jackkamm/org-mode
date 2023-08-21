@@ -578,14 +578,10 @@ tested property is actually present.
 
 *** =ob-python.el=: Support for more result types and plotting
 
-=ob-python= now converts dictionaries to org-mode tables by
-default. Alternatively, dictionaries can be returned as strings by
-setting ":results verbatim" header arg, or as a list by setting
-":results list" header arg.
+=ob-python= now converts the following objects to org-mode tables when
+":results table" header arg is set:
 
-In addition, =ob-python= now converts the following objects to
-org-mode tables when ":results table" header arg is set:
-
+- Dictionaries
 - Numpy arrays
 - Pandas DataFrames
 - Pandas Series

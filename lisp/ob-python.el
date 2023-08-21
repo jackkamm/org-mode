@@ -142,9 +142,12 @@ specifying a variable of the same value."
 
 (defun org-babel-python-table-or-string (results)
   "Convert RESULTS into an appropriate elisp value.
-If the results look like a list or tuple, then convert them into an
-Emacs-lisp table, otherwise return the results as a string."
-  (let ((res (org-babel-script-escape results)))
+If the results look like a list or tuple (but not a dict), then
+convert them into an Emacs-lisp table.  Otherwise return the
+results as a string."
+  (let ((res (if (string-equal "{" (substring results 0 1))
+                 results ;don't covert dicts to elisp
+               (org-babel-script-escape results))))
     (if (listp res)
         (mapcar (lambda (el) (if (eq el 'None)
                                  org-babel-python-None-to el))
@@ -259,7 +262,8 @@ def __org_babel_python_format_value(result, result_file, result_params):
                         return [dict2table(x) for x in res]
                     else:
                         return res
-                result = dict2table(result)
+                if 'table' in result_params:
+                    result = dict2table(result)
                 try:
                     import pandas
                 except ImportError:
