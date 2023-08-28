@@ -873,7 +873,8 @@ guess will be made."
 			     (not (listp r)))
 			(list (list r))
 		      r)))
-	    (let ((file (and (member "file" result-params)
+	    (let ((file (and (seq-intersection '("graphics" "file")
+                                               result-params)
 			     (cdr (assq :file params)))))
 	      ;; If non-empty result and :file then write to :file.
 	      (when file
@@ -2435,7 +2436,8 @@ INFO may provide the values of these header arguments (in the
           or snippet type."
   (cond ((stringp result)
 	 (setq result (org-no-properties result))
-	 (when (member "file" result-params)
+	 (when (seq-intersection '("graphics" "file")
+                                 result-params)
 	   (setq result
                  (org-babel-result-to-file
 		  result
@@ -2572,7 +2574,8 @@ INFO may provide the values of these header arguments (in the
 		   ;; Print verbatim a list that cannot be turned into
 		   ;; a table.
 		   ((listp result) (insert (format "%s\n" result)))
-		   ((member "file" result-params)
+		   ((or (seq-intersection '("graphics" "file")
+                                          result-params))
 		    (when inline
 		      (setq result (org-macro-escape-arguments result)))
 		    (insert result))
@@ -2657,10 +2660,12 @@ INFO may provide the values of these header arguments (in the
 		    (goto-char beg) (when (org-at-table-p) (org-cycle))
 		    (funcall wrap ":results:" ":end:" 'no-escape nil
 			     "{{{results(" ")}}}"))
-		   ((and inline (member "file" result-params))
+		   ((and inline (seq-intersection '("graphics" "file")
+                                                  result-params))
 		    (funcall wrap nil nil nil nil "{{{results(" ")}}}"))
 		   ((and (not (funcall tabulablep result))
-			 (not (member "file" result-params)))
+			 (not (seq-intersection '("graphics" "file")
+                                                result-params)))
 		    (let ((org-babel-inline-result-wrap
 			   ;; Hard code {{{results(...)}}} on top of
 			   ;; customization.
@@ -3375,6 +3380,7 @@ Emacs shutdown.")
 	         (member "code" ,params)
 	         (member "pp" ,params)
 	         (member "file" ,params)
+	         (member "graphics" ,params)
 	         (and (or (member "output" ,params)
 			  (member "raw"    ,params)
 			  (member "org"    ,params)

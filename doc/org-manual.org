@@ -18596,7 +18596,15 @@ follows from the type specified above.
   Results enclosed in a =BEGIN_EXPORT latex= block.  Usage example:
   =:results value latex=.
 
-- =link=, =graphics= ::
+- =graphics= ::
+
+  The code block produces graphics, which are saved to the file
+  specified in the =:file= header argument, and the result is a link
+  to that file.  Graphics implementation varies by language, so see
+  the language-specific documentation for further details on how to
+  use this header arg.
+
+- =link= ::
 
   When used along with =file= type, the result is a link to the file
   specified in =:file= header argument.  However, unlike plain =file=

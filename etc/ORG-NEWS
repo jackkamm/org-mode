@@ -304,6 +304,10 @@ setting the ~STYLE~ property for each sub-task.
 
 The change is breaking when ~org-use-property-inheritance~ is set to ~t~.
 
+*** =:results graphics= no longer requires specifying =:results file= as well
+
+TODO
+
 ** New and changed options
 *** ~org-export-smart-quotes-alist~ is now a custom option
 

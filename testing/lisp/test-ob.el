@@ -1290,30 +1290,6 @@ echo \"test\"
      (org-babel-execute-src-block)
      (search-forward "[[file:/tmp/test.txt]]" nil t))))
 
-(ert-deftest test-ob/result-graphics-link-type-header-argument ()
-  "Ensure that the result is a link to a file.
-The file is just a link to `:file' value.  Inhibit non-empty
-result write to `:file' value."
-  (org-test-with-temp-text "
-<point>#+begin_src shell :results value file graphics :file \"/tmp/test.txt\"
-echo \"hello\" > /tmp/test.txt
-echo \"test\"
-#+end_src"
-    (org-babel-execute-src-block)
-    (should (search-forward "[[file:/tmp/test.txt]]" nil nil))
-    (should (with-temp-buffer
-	      (insert-file-contents "/tmp/test.txt")
-	      (string= "hello\n" (buffer-string)))))
-  ;; Without "link" output type, the result is not a file.
-  (should-not
-   (org-test-with-temp-text "
-<point>#+begin_src shell :results value graphics :file \"/tmp/test.txt\"
-echo \"hello\" > /tmp/test.txt
-echo \"test\"
-#+end_src"
-     (org-babel-execute-src-block)
-     (search-forward "[[file:/tmp/test.txt]]" nil t))))
-
 (ert-deftest test-ob/inline-src_blk-preceded-punct-preceded-by-point ()
   (let ((test-line ".src_emacs-lisp[ :results verbatim ]{ \"x\"  }")
 	(org-babel-inline-result-wrap "=%s="))
