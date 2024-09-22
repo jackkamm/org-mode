@@ -375,11 +375,15 @@ Has four %s escapes to be filled in:
     (session body result-type result-params column-names-p row-names-p async)
   "Evaluate R code in BODY."
   (if session
-      (if async
-          (ob-session-async-org-babel-R-evaluate-session
-           session body result-type column-names-p row-names-p)
-        (org-babel-R-evaluate-session
-         session body result-type result-params column-names-p row-names-p))
+      (progn
+        (with-current-buffer session
+          (setq org-babel-comint-prompt-regexp-override
+                (concat "^" comint-prompt-regexp)))
+        (if async
+            (ob-session-async-org-babel-R-evaluate-session
+             session body result-type column-names-p row-names-p)
+          (org-babel-R-evaluate-session
+           session body result-type result-params column-names-p row-names-p)))
     (org-babel-R-evaluate-external-process
      body result-type result-params column-names-p row-names-p)))
 
@@ -456,12 +460,11 @@ last statement in BODY, as elisp."
 		     (substring line (match-end 1))
 		   line))
 	       (with-current-buffer session
-		 (let ((comint-prompt-regexp (concat "^" comint-prompt-regexp)))
-		   (org-babel-comint-with-output (session org-babel-R-eoe-output)
-		     (insert (mapconcat 'org-babel-chomp
-					(list body org-babel-R-eoe-indicator)
-					"\n"))
-		     (inferior-ess-send-input)))))))) "\n"))))
+		 (org-babel-comint-with-output (session org-babel-R-eoe-output)
+		   (insert (mapconcat 'org-babel-chomp
+				      (list body org-babel-R-eoe-indicator)
+				      "\n"))
+		   (inferior-ess-send-input))))))) "\n"))))
 
 (defun org-babel-R-process-value-result (result column-names-p)
   "R-specific processing of return value.
