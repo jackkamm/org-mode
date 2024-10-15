@@ -486,7 +486,8 @@ by `org-babel-comint-async-filter'."
    session (current-buffer)
    "^\\(?:[>.+] \\)*\\[1\\] \"ob_comint_async_R_\\(start\\|end\\|file\\)_\\(.+\\)\"$"
    'org-babel-chomp
-   'ob-session-async-R-value-callback)
+   'ob-session-async-R-value-callback
+   t)
   (cl-case result-type
     (value
      (let ((tmp-file (org-babel-temp-file "R-")))
