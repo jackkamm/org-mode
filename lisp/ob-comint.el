@@ -75,17 +75,11 @@ This is useful when prompt unexpectedly changes."
       (setq comint-prompt-regexp org-babel-comint-prompt-regexp-old
             org-babel-comint-prompt-regexp-old tmp))))
 
-(defvar-local org-babel-comint-prompt-regexp-override nil
-  "Overrides `comint-prompt-regexp' in `org-babel-comint--prompt-filter.'")
-
 (defun org-babel-comint--prompt-filter (string &optional prompt-regexp)
   "Remove PROMPT-REGEXP from STRING.
 
-PROMPT-REGEXP defaults to `comint-prompt-regexp', which can be
-overridden with `org-babel-comint-prompt-regexp-override'."
-  (let* ((prompt-regexp (or prompt-regexp
-                            org-babel-comint-prompt-regexp-override
-                            comint-prompt-regexp))
+PROMPT-REGEXP defaults to `comint-prompt-regexp'."
+  (let* ((prompt-regexp (or prompt-regexp comint-prompt-regexp))
          ;; We need newline in case if we do progressive replacement
          ;; of agglomerated comint prompts with `comint-prompt-regexp'
          ;; containing ^.
