@@ -39,7 +39,7 @@
 (declare-function run-ess-r "ext:ess-r-mode" (&optional start-args))
 (declare-function inferior-ess-send-input "ext:ess-inf" ())
 (declare-function ess-make-buffer-current "ext:ess-inf" ())
-(declare-function ess-eval-buffer "ext:ess-inf" (&optional vis))
+(declare-function ess-eval-buffer "ext:ess-inf" (vis))
 (declare-function ess-wait-for-process "ext:ess-inf"
 		  (&optional proc sec-prompt wait force-redisplay))
 (declare-function ess-send-string "ext:ess-inf"
@@ -419,20 +419,6 @@ last statement in BODY, as elisp."
 
 (defvar ess-eval-visibly-p)
 
-(defun org-babel-R--send-string (session body)
-  "Send BODY to the R process in SESSION.
-Evaluates BODY in a way that avoids littering the output with
-extra prompts, and avoids perturbing any current text in the
-session buffer."
-  (let ((tmp-src-file (org-babel-temp-file "R-")))
-    (with-temp-file tmp-src-file
-      (insert body))
-    (with-current-buffer session
-      (ess-send-string (get-buffer-process (current-buffer))
-                       (format "source('%s', echo=F, print.eval=T)"
-                               (org-babel-process-file-name
-			        tmp-src-file 'noquote))))))
-
 (defun org-babel-R-evaluate-session
     (session body result-type result-params column-names-p row-names-p)
   "Evaluate BODY in SESSION.
@@ -464,9 +450,16 @@ last statement in BODY, as elisp."
 	  (org-babel-import-elisp-from-file tmp-file '(16)))
 	column-names-p)))
     (output
-     (org-babel-comint-with-output (session org-babel-R-eoe-output nil nil t t)
-       (org-babel-R--send-string
-        session (concat (org-babel-chomp body) "\n" org-babel-R-eoe-indicator))))))
+     (let ((tmp-src-file (org-babel-temp-file "R-")))
+       (with-temp-file tmp-src-file
+         (insert (concat
+                  (org-babel-chomp body) "\n" org-babel-R-eoe-indicator)))
+       (with-current-buffer session
+         (org-babel-comint-with-output (session org-babel-R-eoe-output nil nil t t)
+           (ess-send-string (get-buffer-process (current-buffer))
+                            (format "source('%s', echo=F, print.eval=T)"
+                                    (org-babel-process-file-name
+			             tmp-src-file 'noquote)))))))))
 
 (defun org-babel-R-process-value-result (result column-names-p)
   "R-specific processing of return value.
@@ -520,13 +513,19 @@ by `org-babel-comint-async-filter'."
 	   (ess-eval-buffer nil)))
        tmp-file))
     (output
-     (let ((uuid (org-id-uuid)))
-       (org-babel-R--send-string
-        session
-        (format "%s\n%s\n%s"
-                (format ob-session-async-R-indicator "start" uuid)
-                body
-                (format ob-session-async-R-indicator "end" uuid)))
+     (let ((uuid (org-id-uuid))
+           (ess-local-process-name
+            (process-name (get-buffer-process session)))
+           (ess-eval-visibly-p nil))
+       (with-temp-buffer
+         (insert (format ob-session-async-R-indicator
+			 "start" uuid))
+         (insert "\n")
+         (insert body)
+         (insert "\n")
+         (insert (format ob-session-async-R-indicator
+			 "end" uuid))
+         (ess-eval-buffer nil ))
        uuid))))
 
 (defun ob-session-async-R-value-callback (params tmp-file)
