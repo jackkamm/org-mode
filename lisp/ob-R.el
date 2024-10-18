@@ -448,26 +448,16 @@ last statement in BODY, as elisp."
 	  (org-babel-import-elisp-from-file tmp-file '(16)))
 	column-names-p)))
     (output
-     (mapconcat
-      'org-babel-chomp
-      (butlast
-       (delq nil
-	     (mapcar
-	      (lambda (line) (when (> (length line) 0) line))
-	      (mapcar
-	       (lambda (line) ;; cleanup extra prompts left in output
-		 (if (string-match
-		      "^\\([>+.]\\([ ][>.+]\\)*[ ]\\)"
-		      (car (split-string line "\n")))
-		     (substring line (match-end 1))
-		   line))
-	       (with-current-buffer session
-		 (let ((comint-prompt-regexp (concat "^" comint-prompt-regexp)))
-		   (org-babel-comint-with-output (session org-babel-R-eoe-output)
-		     (insert (mapconcat 'org-babel-chomp
-					(list body org-babel-R-eoe-indicator)
-					"\n"))
-		     (inferior-ess-send-input)))))))) "\n"))))
+     (let ((tmp-src-file (org-babel-temp-file "R-")))
+       (with-temp-file tmp-src-file
+         (insert (concat
+                  (org-babel-chomp body) "\n" org-babel-R-eoe-indicator)))
+       (with-current-buffer session
+         (org-babel-comint-with-output (session org-babel-R-eoe-output nil nil t t)
+           (ess-send-string (get-buffer-process (current-buffer))
+                            (format "source('%s', echo=F, print.eval=T)"
+                                    (org-babel-process-file-name
+			             tmp-src-file 'noquote)))))))))
 
 (defun org-babel-R-process-value-result (result column-names-p)
   "R-specific processing of return value.
