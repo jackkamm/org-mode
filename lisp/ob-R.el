@@ -44,7 +44,6 @@
 		  (&optional proc sec-prompt wait force-redisplay))
 (declare-function ess-send-string "ext:ess-inf"
                   (process string &optional visibly message type))
-(declare-function ess-tracebug-p "ext:ess-inf" ())
 
 (defvar ess-current-process-name) ; ess-custom.el
 (defvar ess-local-process-name)   ; ess-custom.el
@@ -425,17 +424,11 @@ last statement in BODY, as elisp."
 Evaluates BODY in a way that avoids littering the output with
 extra prompts, and avoids perturbing any current text in the
 session buffer."
-  (if (with-current-buffer session (ess-tracebug-p))
-      (with-temp-buffer
-        (let ((ess-local-process-name
-               (process-name (get-buffer-process session)))
-              (ess-eval-visibly-p nil))
-          (insert body)
-          (ess-eval-buffer)))
-    (let ((tmp-src-file (org-babel-temp-file "R-")))
-      (with-temp-file tmp-src-file
-        (insert body))
-      (ess-send-string (process-name (get-buffer-process session))
+  (let ((tmp-src-file (org-babel-temp-file "R-")))
+    (with-temp-file tmp-src-file
+      (insert body))
+    (with-current-buffer session
+      (ess-send-string (get-buffer-process (current-buffer))
                        (format "source('%s', echo=F, print.eval=T)"
                                (org-babel-process-file-name
 			        tmp-src-file 'noquote))))))
