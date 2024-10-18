@@ -62,6 +62,9 @@ executed inside the protection of `save-excursion' and
 (defvar org-babel-comint-prompt-regexp-fallback nil
   "Fallback regexp used to detect prompt.")
 
+(defvar-local org-babel-comint-remove-prompt t
+  "Whether to remove prompt from output.")
+
 (defcustom org-babel-comint-fallback-regexp-threshold 5.0
   "Waiting time until trying to use fallback regexp to detect prompt.
 This is useful when prompt unexpectedly changes."
@@ -166,7 +169,11 @@ or user `keyboard-quit' during execution of body."
               (setq string-buffer (org-babel-comint--echo-filter string-buffer ,full-body)))
 
          ;; Filter out prompts.
-         (org-babel-comint--prompt-filter string-buffer)))))
+         (if org-babel-comint-remove-prompt
+             (org-babel-comint--prompt-filter string-buffer)
+           (substring string-buffer
+                      0 (string-match (regexp-quote ,eoe-indicator)
+                                      string-buffer)))))))
 
 (defun org-babel-comint-input-command (buffer cmd)
   "Pass CMD to BUFFER.
@@ -349,6 +356,7 @@ STRING contains the output originally inserted into the comint buffer."
 	      ;; Remove uuid from the list to search for
 	      (setq uuid-list (delete uuid uuid-list)))))))))
 
+;; TODO: set whether async prompts should be filtered here
 (defun org-babel-comint-async-register
     (session-buffer org-buffer indicator-regexp
 		    chunk-callback file-callback)
