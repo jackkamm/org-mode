@@ -276,8 +276,9 @@ Retrieve variables from PARAMS."
            ;; Make ESS name the process buffer as SESSION.
            (ess-gen-proc-buffer-name-function
             (lambda (_) session)))
-      (unless (org-babel-comint-buffer-livep session)
-        (save-window-excursion
+      (if (org-babel-comint-buffer-livep session)
+	  session
+	(save-window-excursion
 	  (when (get-buffer session)
 	    ;; Session buffer exists, but with dead process
 	    (set-buffer session))
@@ -286,11 +287,8 @@ Retrieve variables from PARAMS."
 	  (let ((R-proc (get-process (or ess-local-process-name
 					 ess-current-process-name))))
 	    (while (process-get R-proc 'callbacks)
-	      (ess-wait-for-process R-proc))
-            (setq org-babel-comint-remove-prompt nil))))
-      (with-current-buffer session
-        (setq org-babel-comint-remove-prompt nil))
-      session)))
+	      (ess-wait-for-process R-proc)))
+	  (current-buffer))))))
 
 (defun org-babel-R-associate-session (session)
   "Associate R code buffer with an R session.
@@ -450,21 +448,26 @@ last statement in BODY, as elisp."
 	  (org-babel-import-elisp-from-file tmp-file '(16)))
 	column-names-p)))
     (output
-     (let ((tmp-src-file (org-babel-temp-file "R-")))
-       (with-temp-file tmp-src-file
-         (insert (concat
-                  (org-babel-chomp body) "\n" org-babel-R-eoe-indicator)))
-       (with-current-buffer session
-         (org-babel-chomp
-          (org-babel-comint-with-output (session org-babel-R-eoe-output)
-            ;; TODO: switch to using ess-send-string. But for some
-            ;; reason this doesn't capture the output when point is
-            ;; not at latest prompt. Maybe best to just abandon
-            ;; org-babel-comint-with-output
-            (insert (format "source('%s', echo=F, print.eval=T)"
-                            (org-babel-process-file-name
-			     tmp-src-file 'noquote)))
-            (inferior-ess-send-input))))))))
+     (mapconcat
+      'org-babel-chomp
+      (butlast
+       (delq nil
+	     (mapcar
+	      (lambda (line) (when (> (length line) 0) line))
+	      (mapcar
+	       (lambda (line) ;; cleanup extra prompts left in output
+		 (if (string-match
+		      "^\\([>+.]\\([ ][>.+]\\)*[ ]\\)"
+		      (car (split-string line "\n")))
+		     (substring line (match-end 1))
+		   line))
+	       (with-current-buffer session
+		 (let ((comint-prompt-regexp (concat "^" comint-prompt-regexp)))
+		   (org-babel-comint-with-output (session org-babel-R-eoe-output)
+		     (insert (mapconcat 'org-babel-chomp
+					(list body org-babel-R-eoe-indicator)
+					"\n"))
+		     (inferior-ess-send-input)))))))) "\n"))))
 
 (defun org-babel-R-process-value-result (result column-names-p)
   "R-specific processing of return value.
