@@ -360,21 +360,30 @@ STRING contains the output originally inserted into the comint buffer."
 (defun org-babel-comint-async-register
     (session-buffer org-buffer indicator-regexp
 		    chunk-callback file-callback
-                    &optional inhibit-prompt-removal)
+                    &optional prompt-handling)
   "Set local org-babel-comint-async variables in SESSION-BUFFER.
 ORG-BUFFER is added to `org-babel-comint-async-buffers' if not
 present.  `org-babel-comint-async-indicator',
 `org-babel-comint-async-chunk-callback', and
 `org-babel-comint-async-file-callback' are set to
 INDICATOR-REGEXP, CHUNK-CALLBACK, and FILE-CALLBACK respectively.
-If INHIBIT-PROMPT-REMOVAL,
-`org-babel-comint-async-remove-prompts-p' is set to `nil' to
-prevent prompt detection and removal from async output."
+PROMPT-HANDLING may be either of the symbols `filter-prompts', in
+which case prompts matching `comint-prompt-regexp' are filtered
+from output before it is passed to CHUNK-CALLBACK, or
+`disable-prompt-filtering', in which case this behavior is
+disabled.  For backward-compatibility, the default value of `nil'
+is equivalent to `filter-prompts'."
   (org-babel-comint-in-buffer session-buffer
     (setq org-babel-comint-async-indicator indicator-regexp
 	  org-babel-comint-async-chunk-callback chunk-callback
-	  org-babel-comint-async-file-callback file-callback
-          org-babel-comint-async-remove-prompts-p (not inhibit-prompt-removal))
+	  org-babel-comint-async-file-callback file-callback)
+    (setq org-babel-comint-async-remove-prompts-p
+          (let ((prompt-handling (or prompt-handling 'filter-prompts)))
+            (cond
+             ((eq prompt-handling 'disable-prompt-filtering) nil)
+             ((eq prompt-handling 'filter-prompts) t)
+             (t (error (format "Unrecognized prompt handling behavior %s"
+                               (symbol-name prompt-handling)))))))
     (unless (memq org-buffer org-babel-comint-async-buffers)
       (setq org-babel-comint-async-buffers
 	    (cons org-buffer org-babel-comint-async-buffers)))

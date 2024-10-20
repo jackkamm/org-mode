@@ -539,7 +539,7 @@ by `org-babel-comint-async-filter'."
    session (current-buffer)
    "ob_comint_async_python_\\(start\\|end\\|file\\)_\\(.+\\)"
    'org-babel-chomp 'org-babel-python-async-value-callback
-   t)
+   'disable-prompt-filtering)
   (pcase result-type
     (`output
      (let ((uuid (org-id-uuid)))
