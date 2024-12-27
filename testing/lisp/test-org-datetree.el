@@ -136,6 +136,54 @@
 	  (org-datetree-find-month-create '(3 29 2012)))
         (org-trim (buffer-string)))))))
 
+(ert-deftest test-org-datetree/find-quarter-month-create ()
+  "Test `org-datetree-find-quarter-month-create' specifications."
+  (let ((org-blank-before-new-entry '((heading . t))))
+    ;; When date is missing, create it with the entry under month.
+    (should
+     (string-match
+      "\\`\\* 2012\n\n\\*\\* 2012-Q1\n\n\\*\\*\\* 2012-03 .*\\'"
+      (org-test-with-temp-text ""
+        (let ((org-datetree-add-timestamp nil))
+	  (org-datetree-find-quarter-month-create '(3 29 2012)))
+        (org-trim (buffer-string)))))))
+
+(ert-deftest test-org-datetree/find-quarter-month-day-create ()
+  "Test `org-datetree-find-quarter-month-day-create' specifications."
+  (let ((org-blank-before-new-entry '((heading . t))))
+    ;; When date is missing, create it with the entry under month.
+    (should
+     (string-match
+      "\\`\\* 2012\n\n\\*\\* 2012-Q1\n\n\\*\\*\\* 2012-03 .*\n\n\\*\\*\\*\\* 2012-03-29 .*\\'"
+      (org-test-with-temp-text ""
+        (let ((org-datetree-add-timestamp nil))
+	  (org-datetree-find-quarter-month-day-create '(3 29 2012)))
+        (org-trim (buffer-string)))))))
+
+(ert-deftest test-org-datetree/find-quarter-week-create ()
+  "Test `org-datetree-find-quarter-week-create' specifications."
+  (let ((org-blank-before-new-entry '((heading . t))))
+    ;; When date is missing, create it with the entry under month.
+    (should
+     (string-match
+      "\\`\\* 2024\n\n\\*\\* 2024-Q4\n\n\\*\\*\\* 2024-W52\\'"
+      (org-test-with-temp-text ""
+        (let ((org-datetree-add-timestamp nil))
+	  (org-datetree-find-quarter-week-create '(12 27 2024)))
+        (org-trim (buffer-string)))))))
+
+(ert-deftest test-org-datetree/find-month-week-create ()
+  "Test `org-datetree-find-month-week-create' specifications."
+  (let ((org-blank-before-new-entry '((heading . t))))
+    ;; When date is missing, create it with the entry under month.
+    (should
+     (string-match
+      "\\`\\* 2024\n\n\\*\\* 2024-12 .*\n\n\\*\\*\\* 2024-W52\\'"
+      (org-test-with-temp-text ""
+        (let ((org-datetree-add-timestamp nil))
+	  (org-datetree-find-month-week-create '(12 27 2024)))
+        (org-trim (buffer-string)))))))
+
 (ert-deftest test-org-datetree/find-iso-week-create ()
   "Test `org-datetree-find-iso-date-create' specification."
   (let ((org-blank-before-new-entry '((heading . t))))
