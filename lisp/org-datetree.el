@@ -77,6 +77,7 @@ tree can be found.  If it is the symbol `subtree-at-point', then
 the tree will be built under the headline at point."
   (org-datetree-find-create-entry d '(year week day) keep-restriction))
 
+;;;###autoload
 (defun org-datetree-find-create-entry
     (d time-grouping &optional keep-restriction)
   "Find or create an entry for date D.
@@ -179,14 +180,14 @@ document quarter behavior, KEEP-RESTRICTION"
              (eq org-datetree-add-timestamp 'inactive))))))))
 
 (defun org-datetree--find-create-subheading
-    (sibling-regex match-num new-title level)
+    (sibling-regex heading-num new-title level)
   "Find datetree subheading, or create it if it doesn't exist.
 SIBLING-REGEX should be a regex that matches the headline and its
 siblings, with 1 match group that captures the order of the
-headline among its siblings, specified as MATCH-NUM.  If a
-sibling is found that is subsequent to MATCH-NUM, a new headline
+headline among its siblings, specified as HEADING-NUM.  If a
+sibling is found that is subsequent to HEADING-NUM, a new headline
 is inserted before it.  Otherwise, if a headline matching
-MATCH-NUM is found, point is moved there.  Otherwise, if neither
+HEADING-NUM is found, point is moved there.  Otherwise, if neither
 the headline nor a subsequent sibling is found, the headline is
 inserted at the bottom of the narrowed buffer.  If a new headline
 is inserted, it is created with the text NEW-TITLE.
@@ -204,16 +205,18 @@ For example, if we want to find or create the headline for
     (setq sibling-regex (replace-match "\\(?1:" nil t sibling-regex)))
   (let ((re (format org-complex-heading-regexp-format
                     sibling-regex))
-	match)
+	match sibling-num)
     (goto-char (point-min))
     (while (and (setq match (re-search-forward re nil t))
                 (goto-char (match-beginning 1))
-		(< (string-to-number (match-string 1)) match-num)))
+                (setq sibling-num (string-to-number (match-string 1)))
+                (or (< sibling-num heading-num)
+                    (not (= (org-reduced-level (org-current-level)) level)))))
     (if match
         (beginning-of-line)
       (goto-char (point-max))
       (unless (bolp) (insert "\n")))
-    (unless (and match (= (string-to-number (match-string 1)) match-num))
+    (unless (and match (= sibling-num heading-num))
       (delete-region (save-excursion (skip-chars-backward " \t\n") (point)) (point))
       (when (org--blank-before-heading-p) (insert "\n"))
       (insert
