@@ -26,7 +26,7 @@
 
 ;; This file contains code to create entries in a tree where the top-level
 ;; nodes represent years, the level 2 nodes represent the months, and the
-;; level 1 entries days.
+;; level 1 entries days. TODO Update this
 
 ;;; Code:
 
@@ -35,9 +35,6 @@
 
 (require 'cal-iso)
 (require 'org)
-
-(defvar-local org-datetree--insert-level nil
-  "The level at which to insert the next datetree subheading.")
 
 (defcustom org-datetree-add-timestamp nil
   "When non-nil, add a time stamp matching date of entry.
@@ -56,7 +53,7 @@ If KEEP-RESTRICTION is non-nil, do not widen the buffer.
 When it is nil, the buffer will be widened to make sure an existing date
 tree can be found.  If it is the symbol `subtree-at-point', then the tree
 will be built under the headline at point."
-  (org-datetree--find-create-group d 'day keep-restriction))
+  (org-datetree-find-create-entry d '(year month day) keep-restriction))
 
 ;;;###autoload
 (defun org-datetree-find-month-create (d &optional keep-restriction)
@@ -67,99 +64,7 @@ If KEEP-RESTRICTION is non-nil, do not widen the buffer.
 When it is nil, the buffer will be widened to make sure an existing date
 tree can be found.  If it is the symbol `subtree-at-point', then the tree
 will be built under the headline at point."
-  (org-datetree--find-create-group d 'month keep-restriction))
-
-;;;###autoload
-(defun org-datetree-find-quarter-month-create (d &optional keep-restriction)
-  "Find or create a quarter-month entry for date D.
-Quarters are defined as 3-month periods.  Compared to
-`org-datetree-find-date-create' this function creates entries
-grouped by year-quarter-month instead of year-month-day.  If
-KEEP-RESTRICTION is non-nil, do not widen the buffer.  When it is
-nil, the buffer will be widened to make sure an existing date
-tree can be found.  If it is the symbol `subtree-at-point', then
-the tree will be built under the headline at point."
-  (org-datetree--find-create-group d 'quarter-month keep-restriction))
-
-;;;###autoload
-(defun org-datetree-find-quarter-month-day-create (d &optional keep-restriction)
-  "Find or create a quarter-month-day entry for date D.
-Quarters are defined as 3-month periods.  Compared to
-`org-datetree-find-date-create' this function creates entries
-grouped by year-quarter-month-day instead of year-month-day.  If
-KEEP-RESTRICTION is non-nil, do not widen the buffer.  When it is
-nil, the buffer will be widened to make sure an existing date
-tree can be found.  If it is the symbol `subtree-at-point', then
-the tree will be built under the headline at point."
-  (org-datetree--find-create-group d 'quarter-month-day keep-restriction))
-
-(defun org-datetree--narrow-to-base (keep-restriction &optional legacy-prop)
-  "Narrow buffer to subtree containing datetree and move point to top.
-If KEEP-RESTRICTION is nil, widen the buffer so
-`org-datetree--find-create' will search the whole buffer for the
-datetree.  If KEEP-RESTRICTION is non-nil, do not widen the
-buffer.  If it is the symbol `subtree-at-point', then narrow to
-the subtree under the headline at point.  If LEGACY-PROP is
-non-nil, find property LEGACY-PROP and narrow to its subtree,
-supporting the old way of tree placement using a property.  Also
-updates `org-datetree--insert-level' to the datetree level."
-  (if (eq keep-restriction 'subtree-at-point)
-      (progn
-	(unless (org-at-heading-p) (error "Not at heading"))
-	(widen)
-	(org-narrow-to-subtree)
-	(setq-local org-datetree--insert-level
-		    (org-get-valid-level (org-current-level) 1)))
-    (unless keep-restriction (widen))
-    ;; Support the old way of tree placement, using a property
-    (when legacy-prop
-      (let ((prop (org-find-property legacy-prop)))
-        (when prop
-	  (goto-char prop)
-	  (setq-local org-datetree--insert-level
-		      (org-get-valid-level (org-current-level) 1))
-	  (org-narrow-to-subtree)))))
-  (goto-char (point-min)))
-
-(defun org-datetree--find-create-group
-    (d time-grouping &optional keep-restriction)
-  "Find or create an entry for date D.
-If TIME-GROUPING is `day', group entries by year-month-day.
-If TIME-GROUPING is `month', then group entries by year-month.
-If TIME-GROUPING is `quarter-month', then group entries
-by year-quarter-month.
-If TIME-GROUPING is `quarter-month-day', then group entries
-by year-quarter-month-day.
-In the latter 2 cases, quarters are defined as 3-month periods."
-  (save-restriction
-    (let* ((org-datetree--insert-level 1)
-           (year (calendar-extract-year d))
-	   (month (calendar-extract-month d))
-	   (day (calendar-extract-day d))
-           (quarter (1+ (/ (1- month) 3))))
-      (org-datetree--narrow-to-base keep-restriction "DATE_TREE")
-      ;; Find year
-      (org-datetree--find-create
-       "\\([12][0-9]\\{3\\}\\)"
-       year (number-to-string year))
-      (when (memq time-grouping '(quarter-month quarter-month-day))
-        (org-datetree--find-create
-         (format "%d-Q\\([1-4]\\)" year)
-         quarter
-         (format "%d-Q%d" year quarter)))
-      ;; Find month
-      (org-datetree--find-create
-       (format "%d-\\([01][0-9]\\) \\w+" year)
-       month
-       (format-time-string "%Y-%m %B" (org-encode-time 0 0 0 1 month year)))
-      ;; Find day
-      (when (memq time-grouping '(day quarter-month-day))
-	(org-datetree--find-create
-         (format "%d-%02d-\\([0123][0-9]\\) \\w+" year month)
-	 day
-         (format-time-string "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year)))
-        (when org-datetree-add-timestamp
-          (org-datetree--insert-day-timestamp year month day))))))
+  (org-datetree-find-create-entry d '(year month) keep-restriction))
 
 ;;;###autoload
 (defun org-datetree-find-iso-week-create (d &optional keep-restriction)
@@ -170,124 +75,112 @@ KEEP-RESTRICTION is non-nil, do not widen the buffer.  When it is
 nil, the buffer will be widened to make sure an existing date
 tree can be found.  If it is the symbol `subtree-at-point', then
 the tree will be built under the headline at point."
-  (save-restriction
-    (let* ((org-datetree--insert-level 1)
-           (year (calendar-extract-year d))
-	   (month (calendar-extract-month d))
-	   (day (calendar-extract-day d))
-	   (time (org-encode-time 0 0 0 day month year))
-	   (iso-date (calendar-iso-from-absolute
-		      (calendar-absolute-from-gregorian d)))
-	   (weekyear (nth 2 iso-date))
-	   (week (nth 0 iso-date)))
-      (org-datetree--narrow-to-base keep-restriction "WEEK_TREE")
-      ;; Find year
-      (org-datetree--find-create
-       "\\([12][0-9]\\{3\\}\\)"
-       weekyear
-       (number-to-string weekyear))
-      ;; Find week.  ISO 8601 week format is %G-W%V(-%u)
-      (org-datetree--find-create
-       (format "%d-W\\([0-5][0-9]\\)" weekyear)
-       week
-       (format-time-string "%G-W%V" time))
-      ;; Find day.  Use the regular date instead of ISO week.
-      (org-datetree--find-create
-       (format "%d-%02d-\\([0123][0-9]\\) \\w+" year month)
-       day
-       (format-time-string "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year)))
-      (when org-datetree-add-timestamp
-        (org-datetree--insert-day-timestamp year month day)))))
+  (org-datetree-find-create-entry d '(year week day) keep-restriction))
 
-;;;###autoload
-(defun org-datetree-find-quarter-week-create (d &optional keep-restriction)
-  "Find or create a quarter-week datetree entry for date D.
-Quarters are defined as 13-week periods; for 53-week years, the
-final quarter has 14 weeks.  Compared to
-`org-datetree-find-date-create' this function creates entries
-ordered by year-quarter-week instead of year-month-day.  When
-KEEP-RESTRICTION is nil, the buffer will be widened to make sure
-an existing date tree can be found.  If it is the symbol
-`subtree-at-point', then the tree will be built under the
-headline at point."
-  (save-restriction
-    (let* ((org-datetree--insert-level 1)
-           (year (calendar-extract-year d))
-	   (month (calendar-extract-month d))
-	   (day (calendar-extract-day d))
-	   (time (org-encode-time 0 0 0 day month year))
-	   (iso-date (calendar-iso-from-absolute
-		      (calendar-absolute-from-gregorian d)))
-	   (weekyear (nth 2 iso-date))
-	   (week (nth 0 iso-date))
-           (quarter (min 4 (1+ (/ (1- week) 13)))))
-      (org-datetree--narrow-to-base keep-restriction)
-      ;; Find year
-      (org-datetree--find-create
-       "\\([12][0-9]\\{3\\}\\)"
-       weekyear
-       (number-to-string weekyear))
-      ;; Find quarter
-      (org-datetree--find-create
-       (format "%d-Q\\([1-4]\\)" weekyear)
-       quarter
-       (format "%d-Q%d" weekyear quarter))
-      ;; Find week
-      (org-datetree--find-create
-       (format "%d-W\\([0-5][0-9]\\)" weekyear)
-       week
-       (format-time-string "%G-W%V" time)))))
+(defun org-datetree-find-create-entry
+    (d time-grouping &optional keep-restriction)
+  "Find or create an entry for date D.
+TIME-GROUPING specifies the grouping levels of the datetree, and
+should be a subset of `(year quarter month week day)'.  TODO
+document quarter behavior, KEEP-RESTRICTION"
+  (let* ((level 1)
+         (year (calendar-extract-year d))
+	 (month (calendar-extract-month d))
+	 (day (calendar-extract-day d))
+         (time (org-encode-time 0 0 0 day month year))
+         (iso-date (calendar-iso-from-absolute
+		    (calendar-absolute-from-gregorian d)))
+         (week (nth 0 iso-date))
+         (nominal-year
+          (if (memq 'week time-grouping)
+              (nth 2 iso-date)
+            year))
+         (nominal-month
+          (if (memq 'week time-grouping)
+              (calendar-extract-month
+               ;; anchor on Thurs, to be consistent with weekyear
+               (calendar-gregorian-from-absolute
+                (calendar-iso-to-absolute
+                 `(,week 4 ,nominal-year))))
+            month))
+         (quarter (if (and (memq 'week time-grouping)
+                           (not (memq 'month time-grouping)))
+                      (min 4 (1+ (/ (1- week) 13)))
+                    (1+ (/ (1- nominal-month) 3))))
+         ;; Support the old way of tree placement, using a property
+         (legacy-prop (cond
+                       ((seq-set-equal-p time-grouping '(year month day))
+                        "DATE_TREE")
+                       ((seq-set-equal-p time-grouping '(year month))
+                        "DATE_TREE")
+                       ((seq-set-equal-p time-grouping '(year week day))
+                        "WEEK_TREE"))))
+    (save-restriction
+      ;; find the base level of the datetree, narrow, and goto top
+      (if (eq keep-restriction 'subtree-at-point)
+          (progn
+	    (unless (org-at-heading-p) (error "Not at heading"))
+	    (widen)
+	    (org-narrow-to-subtree)
+	    (setq level (org-get-valid-level (org-current-level) 1)))
+        (unless keep-restriction (widen))
+        (when legacy-prop
+          (let ((prop (org-find-property legacy-prop)))
+            (when prop
+	      (goto-char prop)
+	      (setq level (org-get-valid-level (org-current-level) 1))
+	      (org-narrow-to-subtree)))))
+      (goto-char (point-min))
+      ;; find/create entries for each datetree level
+      (when (memq 'year time-grouping)
+        (org-datetree--find-create-subheading
+         "\\([12][0-9]\\{3\\}\\)"
+         nominal-year (number-to-string nominal-year) level)
+        (org-narrow-to-subtree)
+        (setq level (1+ level)))
+      (when (memq 'quarter time-grouping)
+        (org-datetree--find-create-subheading
+         (format "%d-Q\\([1-4]\\)" nominal-year)
+         quarter
+         (format "%d-Q%d" nominal-year quarter) level)
+        (org-narrow-to-subtree)
+        (setq level (1+ level)))
+      (when (memq 'month time-grouping)
+        (org-datetree--find-create-subheading
+         (format "%d-\\([01][0-9]\\) \\w+" nominal-year)
+         nominal-month
+         (format-time-string "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
+                                                         nominal-year))
+         level)
+        (org-narrow-to-subtree)
+        (setq level (1+ level)))
+      (when (memq 'week time-grouping)
+        (org-datetree--find-create-subheading
+         (format "%d-W\\([0-5][0-9]\\)" nominal-year)
+         week
+         (format-time-string "%G-W%V" time) level)
+        (org-narrow-to-subtree)
+        (setq level (1+ level)))
+      (when (memq 'day time-grouping)
+        ;; Use regular date instead of ISO-week year/month
+	(org-datetree--find-create-subheading
+         (format "%d-%02d-\\([0123][0-9]\\) \\w+" year month)
+	 day
+         (format-time-string "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
+         level)
+        (when org-datetree-add-timestamp
+          (save-excursion
+            (end-of-line)
+            (insert "\n")
+            (org-indent-line)
+            (org-insert-timestamp
+             (org-encode-time 0 0 0 day month year)
+             nil
+             (eq org-datetree-add-timestamp 'inactive))))))))
 
-;;;###autoload
-(defun org-datetree-find-month-week-create (d &optional keep-restriction)
-  "Find or create a month-week datetree entry for date D.
-Weeks are assigned to the month Thursday is in, generalizing the
-ISO-8601 method of assigning weeks to years.  Compared to
-`org-datetree-find-date-create' this function creates entries
-ordered by year-month-week instead of year-month-day.  When
-KEEP-RESTRICTION is nil, the buffer will be widened to make sure
-an existing date tree can be found.  If it is the symbol
-`subtree-at-point', then the tree will be built under the
-headline at point."
-  (save-restriction
-    (let* ((org-datetree--insert-level 1)
-           (year (calendar-extract-year d))
-	   (month (calendar-extract-month d))
-	   (day (calendar-extract-day d))
-	   (time (org-encode-time 0 0 0 day month year))
-	   (iso-date (calendar-iso-from-absolute
-		      (calendar-absolute-from-gregorian d)))
-	   (weekyear (nth 2 iso-date))
-	   (week (nth 0 iso-date))
-           (weekmonth (calendar-extract-month
-                       ;; anchor on Thurs, to be consistent with weekyear
-                       (calendar-gregorian-from-absolute
-                        (calendar-iso-to-absolute
-                         `(,week 4 ,year))))))
-      (org-datetree--narrow-to-base keep-restriction)
-      ;; Find year
-      (org-datetree--find-create
-       "\\([12][0-9]\\{3\\}\\)"
-       weekyear
-       (number-to-string weekyear))
-      ;; Find month
-      (org-datetree--find-create
-       (format "%d-\\([01][0-9]\\) \\w+" year)
-       weekmonth
-       (format-time-string "%Y-%m %B" (org-encode-time 0 0 0 1 month year)))
-      ;; Find week
-      (org-datetree--find-create
-       (format "%d-W\\([0-5][0-9]\\)" weekyear)
-       week
-       (format-time-string "%G-W%V" time)))))
-
-(defun org-datetree--find-create
-    (sibling-regex match-num new-title)
-  "Find datetree (sub-)heading, or create it if it doesn't exist.
-Then narrow to subtree and increment `org-datetree--insert-level'
-so that subsequent child subheadings are inserted in the right
-place.
-
+(defun org-datetree--find-create-subheading
+    (sibling-regex match-num new-title level)
+  "Find datetree subheading, or create it if it doesn't exist.
 SIBLING-REGEX should be a regex that matches the headline and its
 siblings, with 1 match group that captures the order of the
 headline among its siblings, specified as MATCH-NUM.  If a
@@ -301,9 +194,9 @@ is inserted, it is created with the text NEW-TITLE.
 For example, if we want to find or create the headline for
 \"2024-12-27 Friday\", then we could call this as:
 
-  (org-datetree--find-create \"2024-12-\\([0123][0-9]\\) \\w+\"
-                             27
-                             \"2024-12-27 Friday\")"
+  (org-datetree--find-create-subheading
+    \"2024-12-\\([0123][0-9]\\) \\w+\" 27
+    \"2024-12-27 Friday\")"
   ;; ensure that the first match group in SIBLING-REGEX
   ;; is the first inside `org-complex-heading-regexp-format'
   (when (and (not (string-match-p "\\\\(\\?1:" sibling-regex))
@@ -325,25 +218,12 @@ For example, if we want to find or create the headline for
       (when (org--blank-before-heading-p) (insert "\n"))
       (insert
        (format "\n%s \n" (make-string (if org-odd-levels-only
-                                          (1- (* 2 org-datetree--insert-level))
-                                        org-datetree--insert-level)
+                                          (1- (* 2 level))
+                                        level)
                                       ?*)))
       (backward-char)
       (insert new-title)
-      (beginning-of-line)))
-  (org-narrow-to-subtree)
-  (setq org-datetree--insert-level (1+ org-datetree--insert-level)))
-
-(defun org-datetree--insert-day-timestamp (year month day)
-  "Insert timestamp matching date of datetree entry."
-  (save-excursion
-    (end-of-line)
-    (insert "\n")
-    (org-indent-line)
-    (org-insert-timestamp
-     (org-encode-time 0 0 0 day month year)
-     nil
-     (eq org-datetree-add-timestamp 'inactive))))
+      (beginning-of-line))))
 
 (defun org-datetree-file-entry-under (txt d)
   "Insert a node TXT into the date tree under date D."

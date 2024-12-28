@@ -1093,10 +1093,6 @@ Store them in the capture property list."
 	    (pcase (org-capture-get :tree-type)
 	      (`week #'org-datetree-find-iso-week-create)
 	      (`month #'org-datetree-find-month-create)
-	      (`quarter-month #'org-datetree-find-quarter-month-create)
-	      (`quarter-month-day #'org-datetree-find-quarter-month-day-create)
-	      (`quarter-week #'org-datetree-find-quarter-week-create)
-	      (`month-week #'org-datetree-find-month-week-create)
 	      (_ #'org-datetree-find-date-create))
 	    (calendar-gregorian-from-absolute
 	     (cond
