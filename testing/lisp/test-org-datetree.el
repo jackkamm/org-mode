@@ -260,6 +260,21 @@
 	  (org-datetree-find-iso-week-create '(9 1 2015))
 	  (org-datetree-find-iso-week-create '(12 31 2014)))
         (org-trim (buffer-string)))))
+    ;; Sort new entry in correct order within its week when
+    ;; iso-week-year is not calendar year
+    (should
+     (string-match
+      "\\`\\* 2015
+
+\\*\\* 2015-W01
+
+\\*\\*\\* 2014-12-31 .*
+\\*\\*\\* 2015-01-01 .*"
+      (org-test-with-temp-text "* 2015"
+        (let ((org-datetree-add-timestamp nil))
+	  (org-datetree-find-iso-week-create '(1 1 2015))
+	  (org-datetree-find-iso-week-create '(12 31 2014)))
+        (org-trim (buffer-string)))))
     ;; When `org-datetree-add-timestamp' is non-nil, insert a timestamp
     ;; in entry.  When set to `inactive', insert an inactive one.
     (should
