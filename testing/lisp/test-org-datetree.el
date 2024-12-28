@@ -108,6 +108,30 @@
         (let ((org-datetree-add-timestamp nil))
 	  (org-datetree-find-date-create '(3 29 2012)))
         (org-trim (buffer-string)))))
+    ;; Insert at correct location, even if some other heading has a
+    ;; subtree that looks like a datetree
+    (should
+     (string-match
+      "\\`\\* Dummy heading
+
+\\*\\* 2012
+
+\\* 2012
+
+\\*\\* 2012-03 March
+
+\\*\\*\\* 2012-03-29 .*\\'"
+      (org-test-with-temp-text "\
+* Dummy heading
+
+** 2012
+
+* 2012
+
+** 2012-03 March"
+                               (let ((org-datetree-add-timestamp nil))
+	                         (org-datetree-find-date-create '(3 29 2012)))
+                               (org-trim (buffer-string)))))
     ;; Always leave point at beginning of day entry.
     (should
      (string-match
