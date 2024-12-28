@@ -136,20 +136,18 @@ document quarter behavior, KEEP-RESTRICTION"
       (when (memq 'year time-grouping)
         (org-datetree--find-create-subheading
          "\\([12][0-9]\\{3\\}\\)"
-         nominal-year (number-to-string nominal-year) level)
+         (number-to-string nominal-year) level)
         (org-narrow-to-subtree)
         (setq level (1+ level)))
       (when (memq 'quarter time-grouping)
         (org-datetree--find-create-subheading
-         (format "%d-Q\\([1-4]\\)" nominal-year)
-         quarter
+         "\\([12][0-9]\\{3\\}-Q[1-4]\\)"
          (format "%d-Q%d" nominal-year quarter) level)
         (org-narrow-to-subtree)
         (setq level (1+ level)))
       (when (memq 'month time-grouping)
         (org-datetree--find-create-subheading
-         (format "%d-\\([01][0-9]\\) \\w+" nominal-year)
-         nominal-month
+         "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+"
          (format-time-string "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
                                                          nominal-year))
          level)
@@ -157,16 +155,14 @@ document quarter behavior, KEEP-RESTRICTION"
         (setq level (1+ level)))
       (when (memq 'week time-grouping)
         (org-datetree--find-create-subheading
-         (format "%d-W\\([0-5][0-9]\\)" nominal-year)
-         week
+         "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)"
          (format-time-string "%G-W%V" time) level)
         (org-narrow-to-subtree)
         (setq level (1+ level)))
       (when (memq 'day time-grouping)
         ;; Use regular date instead of ISO-week year/month
 	(org-datetree--find-create-subheading
-         (format "%d-%02d-\\([0123][0-9]\\) \\w+" year month)
-	 day
+         "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+"
          (format-time-string "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
          level)
         (when org-datetree-add-timestamp
@@ -180,7 +176,7 @@ document quarter behavior, KEEP-RESTRICTION"
              (eq org-datetree-add-timestamp 'inactive))))))))
 
 (defun org-datetree--find-create-subheading
-    (sibling-regex heading-num new-title level)
+    (sibling-regex new-title level)
   "Find datetree subheading, or create it if it doesn't exist.
 SIBLING-REGEX should be a regex that matches the headline and its
 siblings, with 1 match group that captures the order of the
@@ -203,20 +199,22 @@ For example, if we want to find or create the headline for
   (when (and (not (string-match-p "\\\\(\\?1:" sibling-regex))
              (string-match "\\\\(" sibling-regex))
     (setq sibling-regex (replace-match "\\(?1:" nil t sibling-regex)))
-  (let ((re (format org-complex-heading-regexp-format
+  (let ((target-match (and (string-match sibling-regex new-title)
+                           (match-string 1 new-title)))
+        (re (format org-complex-heading-regexp-format
                     sibling-regex))
-	match sibling-num)
+	match sibling-match)
     (goto-char (point-min))
     (while (and (setq match (re-search-forward re nil t))
                 (goto-char (match-beginning 1))
-                (setq sibling-num (string-to-number (match-string 1)))
-                (or (< sibling-num heading-num)
+                (setq sibling-match (match-string 1))
+                (or (string< sibling-match target-match)
                     (not (= (org-reduced-level (org-current-level)) level)))))
     (if match
         (beginning-of-line)
       (goto-char (point-max))
       (unless (bolp) (insert "\n")))
-    (unless (and match (= sibling-num heading-num))
+    (unless (and match (string= sibling-match target-match))
       (delete-region (save-excursion (skip-chars-backward " \t\n") (point)) (point))
       (when (org--blank-before-heading-p) (insert "\n"))
       (insert
