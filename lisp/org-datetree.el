@@ -85,8 +85,7 @@ the tree will be built under the headline at point."
 TIME-GROUPING specifies the grouping levels of the datetree, and
 should be a subset of `(year quarter month week day)'.  TODO
 document quarter behavior, KEEP-RESTRICTION"
-  (let* ((level 1)
-         (year (calendar-extract-year d))
+  (let* ((year (calendar-extract-year d))
 	 (month (calendar-extract-month d))
 	 (day (calendar-extract-day d))
          (time (org-encode-time 0 0 0 day month year))
@@ -119,51 +118,46 @@ document quarter behavior, KEEP-RESTRICTION"
                         "WEEK_TREE")))
          tree)
     (save-restriction
-      ;; find the base level of the datetree, narrow, and goto top
+      ;; get the datetree base and narrow to it
       (if (eq keep-restriction 'subtree-at-point)
           (progn
 	    (unless (org-at-heading-p) (error "Not at heading"))
 	    (widen)
 	    (org-narrow-to-subtree)
-	    (setq level (org-get-valid-level (org-current-level) 1)))
+            (setq tree (org-element-lineage (org-element-at-point) 'headline t)))
         (unless keep-restriction (widen))
-        (when legacy-prop
-          (let ((prop (org-find-property legacy-prop)))
-            (when prop
-	      (goto-char prop)
-	      (setq level (org-get-valid-level (org-current-level) 1))
-	      (org-narrow-to-subtree)))))
-      (goto-char (point-min))
-      (setq tree (org-element-parse-buffer))
+        (let ((prop (and legacy-prop (org-find-property legacy-prop))))
+          (if prop
+              (progn
+                (goto-char prop)
+	        (org-narrow-to-subtree)
+                (setq tree (org-element-lineage (org-element-at-point) 'headline t)))
+            (setq tree (org-element-parse-buffer)))))
       ;; find/create entries for each datetree level
       (when (memq 'year time-grouping)
         (setq tree (org-datetree--find-create-subheading
                     "\\([12][0-9]\\{3\\}\\)"
-                    (number-to-string nominal-year) level tree))
-        (setq level (1+ level)))
+                    (number-to-string nominal-year) tree)))
       (when (memq 'quarter time-grouping)
         (setq tree (org-datetree--find-create-subheading
                     "\\([12][0-9]\\{3\\}-Q[1-4]\\)"
-                    (format "%d-Q%d" nominal-year quarter) level tree))
-        (setq level (1+ level)))
+                    (format "%d-Q%d" nominal-year quarter) tree)))
       (when (memq 'month time-grouping)
         (setq tree (org-datetree--find-create-subheading
                     "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+"
                     (format-time-string "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
                                                                     nominal-year))
-                    level tree))
-        (setq level (1+ level)))
+                    tree)))
       (when (memq 'week time-grouping)
         (setq tree (org-datetree--find-create-subheading
                     "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)"
-                    (format-time-string "%G-W%V" time) level tree))
-        (setq level (1+ level)))
+                    (format-time-string "%G-W%V" time) tree)))
       (when (memq 'day time-grouping)
         ;; Use regular date instead of ISO-week year/month
 	(setq tree (org-datetree--find-create-subheading
                     "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+"
                     (format-time-string "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
-                    level tree))
+                    tree))
         (when org-datetree-add-timestamp
           (save-excursion
             (end-of-line)
@@ -175,7 +169,7 @@ document quarter behavior, KEEP-RESTRICTION"
              (eq org-datetree-add-timestamp 'inactive))))))))
 
 (defun org-datetree--find-create-subheading
-    (sibling-regex new-title level tree)
+    (sibling-regex new-title tree)
   "Find datetree subheading, or create it if it doesn't exist.
 SIBLING-REGEX should be a regex that matches the headline and its
 siblings, with 1 match group that captures the order of the
@@ -195,7 +189,10 @@ For example, if we want to find or create the headline for
     \"2024-12-27 Friday\")"
   ;; ensure that the first match group in SIBLING-REGEX
   ;; is the first inside `org-complex-heading-regexp-format'
-  (let* ((target-match (and (string-match sibling-regex new-title)
+  (let* ((level (if (eq (org-element-type tree) 'org-data)
+                    1
+                  (1+ (org-element-property :level tree))))
+         (target-match (and (string-match sibling-regex new-title)
                             (match-string 1 new-title)))
          (sibling (org-element-map tree 'headline
                     (lambda (d)
