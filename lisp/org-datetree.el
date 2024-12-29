@@ -83,8 +83,18 @@ the tree will be built under the headline at point."
     (d time-grouping &optional keep-restriction)
   "Find or create an entry for date D.
 TIME-GROUPING specifies the grouping levels of the datetree, and
-should be a subset of `(year quarter month week day)'.  TODO
-document quarter behavior, KEEP-RESTRICTION"
+should be a subset of `(year quarter month week day)'.  Weeks are
+assigned to years according to ISO-8601.  If TIME-GROUPING
+contains both `month' and `week', then weeks are assigned to the
+month containing Thursday, for consistency with the ISO-8601
+year-week rule.  If TIME-GROUPING contains `quarter' and `week'
+but not `month', quarters are defined as 13-week periods;
+otherwise they are defined as 3-month periods.
+
+If KEEP-RESTRICTION is non-nil, do not widen the buffer.  When it
+is nil, the buffer will be widened to make sure an existing date
+tree can be found.  If it is the symbol `subtree-at-point', then
+the tree will be built under the headline at point."
   (let* ((year (calendar-extract-year d))
 	 (month (calendar-extract-month d))
 	 (day (calendar-extract-day d))
@@ -154,9 +164,54 @@ document quarter behavior, KEEP-RESTRICTION"
            nil
            (eq org-datetree-add-timestamp 'inactive)))))))
 
+(defun org-datetree--compare-fun-from-regex (sibling-regex)
+  "Construct comparison function based on regular expression.
+SIBLING-REGEX should be a regex that matches the headline and its
+siblings, with 1 match group.  Headlines are compared by the
+lexicographic ordering of match group 1."
+  (lambda (sibling-title new-title)
+    (let ((target-match (and (string-match sibling-regex new-title)
+                             (match-string 1 new-title)))
+          (sibling-match (and (string-match sibling-regex sibling-title)
+                              (match-string 1 sibling-title))))
+      (cond
+       ((not (and target-match sibling-match)) nil)
+       ((string< sibling-match target-match) -1)
+       ((string> sibling-match target-match) 1)
+       (t 0)))))
+
 (defun org-datetree-find-create-hierarchy
     (hier-pairs &optional keep-restriction legacy-prop)
-  "TODO"
+  "Insert a new entry into a datetree from the entry's full date hierarchy.
+HIER-PAIRS is a list whose first entry corresponds to the outermost element
+(e.g. year) and last entry corresponds to the innermost (e.g. day).
+Each entry of the list is a pair, the car is the headline for that level
+(e.g. \"2024\" or \"2024-12-28\"), and the cadr is a string
+comparison function for sorting each headline among its siblings.
+The comparison function should take 2 arguments, corresponding to
+the titles of 2 headlines, and return a negative number of the
+first headline precedes the second, a positive number of the
+second has precedence, 0 if the headlines are at the same time,
+or `nil' if a headline isn't a valid datetree subheading.  For
+example, HIER-PAIRS could look like
+
+   ((\"2024\" compare-year-fun)
+    (\"2024-12 December\" compare-month-fun)
+    (\"2024-12-28 Saturday\" compare-day-fun))
+
+where compare-month-fun would be some function where
+(compare-month-fun \"2024-12-December\" \"2024-12-November\") is
+negative, and (compare-month-fun \"2024-12-December\" \"Potato\")
+is nil.
+
+If KEEP-RESTRICTION is non-nil, do not widen the buffer.
+When it is nil, the buffer will be widened to make sure an existing date
+tree can be found.  If it is the symbol `subtree-at-point', then the tree
+will be built under the headline at point.
+
+If LEGACY-PROP is non-nil, the tree is located by searching for a
+headline with property LEGACY-PROP, supporting the old way of
+tree placement via a property."
   (let (tree)
     (save-restriction
       ;; get the datetree base and narrow to it
@@ -167,6 +222,7 @@ document quarter behavior, KEEP-RESTRICTION"
 	    (org-narrow-to-subtree)
             (setq tree (org-element-lineage (org-element-at-point) 'headline t)))
         (unless keep-restriction (widen))
+        ;; Support the old way of tree placement, using a property
         (let ((prop (and legacy-prop (org-find-property legacy-prop))))
           (if prop
               (progn
@@ -182,40 +238,18 @@ document quarter behavior, KEEP-RESTRICTION"
               (cadr pair) (car pair) tree)))
       tree)))
 
-(defun org-datetree--compare-fun-from-regex (sibling-regex)
-  "TODO"
-  (lambda (sibling-title new-title)
-    (let ((target-match (and (string-match sibling-regex new-title)
-                             (match-string 1 new-title)))
-          (sibling-match (and (string-match sibling-regex sibling-title)
-                              (match-string 1 sibling-title))))
-      (cond
-       ((not (and target-match sibling-match)) nil)
-       ((string< sibling-match target-match) -1)
-       ((string> sibling-match target-match) 1)
-       (t 0)))))
-
 (defun org-datetree--find-create-subheading
     (compare-fun new-title tree)
   "Find datetree subheading, or create it if it doesn't exist.
-SIBLING-REGEX should be a regex that matches the headline and its
-siblings, with 1 match group that captures the order of the
-headline among its siblings, specified as HEADING-NUM.  If a
-sibling is found that is subsequent to HEADING-NUM, a new headline
-is inserted before it.  Otherwise, if a headline matching
-HEADING-NUM is found, point is moved there.  Otherwise, if neither
-the headline nor a subsequent sibling is found, the headline is
-inserted at the bottom of the narrowed buffer.  If a new headline
-is inserted, it is created with the text NEW-TITLE.
-
-For example, if we want to find or create the headline for
-\"2024-12-27 Friday\", then we could call this as:
-
-  (org-datetree--find-create-subheading
-    \"2024-12-\\([0123][0-9]\\) \\w+\" 27
-    \"2024-12-27 Friday\")"
-  ;; ensure that the first match group in SIBLING-REGEX
-  ;; is the first inside `org-complex-heading-regexp-format'
+After insertion, move point to beginning of the subheading, and
+narrow to its subtree.  NEW-TITLE is the subheading to be found
+or created.  TREE is the parent headline, or an element of type
+`org-data' if NEW-TITLE is to be at level 1.  COMPARE-FUN is a
+function of 2 arguments for comparing headline titles; it should
+return a negative number if the first headline precedes the
+second, a positive number if the second number has precedence, 0
+if the headlines are at the same time, and `nil' if a headline
+isn't a valid datetree subheading at this level."
   (let* ((level (if (eq (org-element-type tree) 'org-data)
                     1
                   (1+ (org-element-property :level tree))))
