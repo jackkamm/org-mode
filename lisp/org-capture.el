@@ -293,7 +293,9 @@ properties are:
 
  :tree-type          When `week', make a week tree instead of the month-day
                      tree.  When `month', make a month tree instead of the
-                     month-day tree.
+                     month-day tree.  When any subset of
+                     `(year quarter month week day)', create a datetree
+                     hierarchy with the specified levels.
 
  :unnarrowed         Do not narrow the target buffer, simply show the
                      full buffer.  Default is to narrow it so that you
@@ -1090,10 +1092,13 @@ Store them in the capture property list."
 	   ;; yesterday, if we are extending dates for a couple of
 	   ;; hours)
 	   (funcall
+            #'org-datetree-find-create-entry
 	    (pcase (org-capture-get :tree-type)
-	      (`week #'org-datetree-find-iso-week-create)
-	      (`month #'org-datetree-find-month-create)
-	      (_ #'org-datetree-find-date-create))
+	      (`week '(year week day))
+	      (`month '(year month))
+	      (`day '(year month day))
+              ((pred not) '(year month day))
+              (grouping grouping))
 	    (calendar-gregorian-from-absolute
 	     (cond
 	      (org-overriding-default-time
