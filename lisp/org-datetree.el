@@ -220,13 +220,10 @@ For example, if we want to find or create the headline for
       (delete-region (save-excursion (skip-chars-backward " \t\n") (point)) (point))
       (when (org--blank-before-heading-p) (insert "\n"))
       (insert
-       (format "\n%s \n" (make-string (if org-odd-levels-only
-                                          (1- (* 2 level))
-                                        level)
-                                      ?*)))
-      (backward-char)
-      (insert new-title)
-      (beginning-of-line)
+       (format "\n%s %s\n"
+               (make-string (if org-odd-levels-only (1- (* 2 level)) level) ?*)
+               new-title))
+      (forward-line -1)
       (org-narrow-to-subtree)
       (org-element-at-point))))
 
