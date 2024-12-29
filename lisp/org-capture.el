@@ -293,7 +293,9 @@ properties are:
 
  :tree-type          When `week', make a week tree instead of the month-day
                      tree.  When `month', make a month tree instead of the
-                     month-day tree.
+                     month-day tree.  When any subset of
+                     `(year quarter month week day)', create a datetree
+                     hierarchy with the specified levels.
 
  :unnarrowed         Do not narrow the target buffer, simply show the
                      full buffer.  Default is to narrow it so that you
