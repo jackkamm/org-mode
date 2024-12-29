@@ -207,12 +207,16 @@ For example, if we want to find or create the headline for
         (goto-char (org-element-property :begin sibling))
       (goto-char (point-max))
       (unless (bolp) (insert "\n")))
-    ;; if headline wasn't found, insert it, and move point to its start
-    (unless (and sibling
-                 (string= (and (string-match sibling-regex
-                                             (org-element-property :raw-value sibling))
-                               (match-string 1 (org-element-property :raw-value sibling)))
-                          target-match))
+    (if (and sibling
+             (string= (and (string-match sibling-regex
+                                         (org-element-property :raw-value sibling))
+                           (match-string 1 (org-element-property :raw-value sibling)))
+                      target-match))
+        ;; return the matched headline
+        (progn
+          (org-narrow-to-subtree)
+          sibling)
+      ;; insert new headline and return it
       (delete-region (save-excursion (skip-chars-backward " \t\n") (point)) (point))
       (when (org--blank-before-heading-p) (insert "\n"))
       (insert
@@ -222,10 +226,9 @@ For example, if we want to find or create the headline for
                                       ?*)))
       (backward-char)
       (insert new-title)
-      (beginning-of-line))
-    ;; narrow to subtree and return its ast
-    (org-narrow-to-subtree)
-    (car (org-element-contents (org-element-parse-buffer 'headline)))))
+      (beginning-of-line)
+      (org-narrow-to-subtree)
+      (org-element-at-point))))
 
 (defun org-datetree-file-entry-under (txt d)
   "Insert a node TXT into the date tree under date D."
