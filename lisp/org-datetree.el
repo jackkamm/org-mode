@@ -227,58 +227,6 @@ For example, if we want to find or create the headline for
     (org-narrow-to-subtree)
     (car (org-element-contents (org-element-parse-buffer 'headline)))))
 
-;;(defun org-datetree--find-create-subheading
-;;    (sibling-regex new-title level tree)
-;;  "Find datetree subheading, or create it if it doesn't exist.
-;;SIBLING-REGEX should be a regex that matches the headline and its
-;;siblings, with 1 match group that captures the order of the
-;;headline among its siblings, specified as HEADING-NUM.  If a
-;;sibling is found that is subsequent to HEADING-NUM, a new headline
-;;is inserted before it.  Otherwise, if a headline matching
-;;HEADING-NUM is found, point is moved there.  Otherwise, if neither
-;;the headline nor a subsequent sibling is found, the headline is
-;;inserted at the bottom of the narrowed buffer.  If a new headline
-;;is inserted, it is created with the text NEW-TITLE.
-;;
-;;For example, if we want to find or create the headline for
-;;\"2024-12-27 Friday\", then we could call this as:
-;;
-;;  (org-datetree--find-create-subheading
-;;    \"2024-12-\\([0123][0-9]\\) \\w+\" 27
-;;    \"2024-12-27 Friday\")"
-;;  ;; ensure that the first match group in SIBLING-REGEX
-;;  ;; is the first inside `org-complex-heading-regexp-format'
-;;  (when (and (not (string-match-p "\\\\(\\?1:" sibling-regex))
-;;             (string-match "\\\\(" sibling-regex))
-;;    (setq sibling-regex (replace-match "\\(?1:" nil t sibling-regex)))
-;;  (let ((target-match (and (string-match sibling-regex new-title)
-;;                           (match-string 1 new-title)))
-;;        (re (format org-complex-heading-regexp-format
-;;                    sibling-regex))
-;;	match sibling-match)
-;;    (goto-char (point-min))
-;;    (while (and (setq match (re-search-forward re nil t))
-;;                (goto-char (match-beginning 1))
-;;                (setq sibling-match (match-string 1))
-;;                (or (string< sibling-match target-match)
-;;                    (not (= (org-reduced-level (org-current-level)) level)))))
-;;    (if match
-;;        (beginning-of-line)
-;;      (goto-char (point-max))
-;;      (unless (bolp) (insert "\n")))
-;;    (unless (and match (string= sibling-match target-match))
-;;      (delete-region (save-excursion (skip-chars-backward " \t\n") (point)) (point))
-;;      (when (org--blank-before-heading-p) (insert "\n"))
-;;      (insert
-;;       (format "\n%s \n" (make-string (if org-odd-levels-only
-;;                                          (1- (* 2 level))
-;;                                        level)
-;;                                      ?*)))
-;;      (backward-char)
-;;      (insert new-title)
-;;      (beginning-of-line))
-;;    (org-narrow-to-subtree)))
-
 (defun org-datetree-file-entry-under (txt d)
   "Insert a node TXT into the date tree under date D."
   (org-datetree-find-date-create d)
