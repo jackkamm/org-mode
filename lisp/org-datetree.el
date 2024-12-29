@@ -136,26 +136,31 @@ document quarter behavior, KEEP-RESTRICTION"
       ;; find/create entries for each datetree level
       (when (memq 'year time-grouping)
         (setq tree (org-datetree--find-create-subheading
-                    "\\([12][0-9]\\{3\\}\\)"
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}\\)")
                     (number-to-string nominal-year) tree)))
       (when (memq 'quarter time-grouping)
         (setq tree (org-datetree--find-create-subheading
-                    "\\([12][0-9]\\{3\\}-Q[1-4]\\)"
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}-Q[1-4]\\)")
                     (format "%d-Q%d" nominal-year quarter) tree)))
       (when (memq 'month time-grouping)
         (setq tree (org-datetree--find-create-subheading
-                    "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+"
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+")
                     (format-time-string "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
                                                                     nominal-year))
                     tree)))
       (when (memq 'week time-grouping)
         (setq tree (org-datetree--find-create-subheading
-                    "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)"
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)")
                     (format-time-string "%G-W%V" time) tree)))
       (when (memq 'day time-grouping)
         ;; Use regular date instead of ISO-week year/month
 	(setq tree (org-datetree--find-create-subheading
-                    "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+"
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+")
                     (format-time-string "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
                     tree))
         (when org-datetree-add-timestamp
@@ -168,8 +173,21 @@ document quarter behavior, KEEP-RESTRICTION"
              nil
              (eq org-datetree-add-timestamp 'inactive))))))))
 
+(defun org-datetree--compare-fun-from-regex (sibling-regex)
+  "TODO"
+  (lambda (sibling-title new-title)
+    (let ((target-match (and (string-match sibling-regex new-title)
+                             (match-string 1 new-title)))
+          (sibling-match (and (string-match sibling-regex sibling-title)
+                              (match-string 1 sibling-title))))
+      (cond
+       ((not (and target-match sibling-match)) nil)
+       ((string< sibling-match target-match) -1)
+       ((string> sibling-match target-match) 1)
+       (t 0)))))
+
 (defun org-datetree--find-create-subheading
-    (sibling-regex new-title tree)
+    (compare-fun new-title tree)
   "Find datetree subheading, or create it if it doesn't exist.
 SIBLING-REGEX should be a regex that matches the headline and its
 siblings, with 1 match group that captures the order of the
@@ -192,15 +210,14 @@ For example, if we want to find or create the headline for
   (let* ((level (if (eq (org-element-type tree) 'org-data)
                     1
                   (1+ (org-element-property :level tree))))
-         (target-match (and (string-match sibling-regex new-title)
-                            (match-string 1 new-title)))
          (sibling (org-element-map tree 'headline
                     (lambda (d)
-                      (let ((title (org-element-property :raw-value d)))
-                        (and (string-match sibling-regex title)
-                             (and (not (string< (match-string 1 title) target-match))
-                                 (= (org-element-property :level d) level))
-                             d)))
+                      (when (= (org-element-property :level d) level)
+                        (let ((compare-result
+                               (funcall compare-fun
+                                        (org-element-property :raw-value d)
+                                        new-title)))
+                          (and compare-result (>= compare-result 0) d))))
                     nil t)))
     ;; go to headline, or first successor sibling, or end of buffer
     (if sibling
@@ -208,10 +225,9 @@ For example, if we want to find or create the headline for
       (goto-char (point-max))
       (unless (bolp) (insert "\n")))
     (if (and sibling
-             (string= (and (string-match sibling-regex
-                                         (org-element-property :raw-value sibling))
-                           (match-string 1 (org-element-property :raw-value sibling)))
-                      target-match))
+             (= 0 (funcall compare-fun
+                           (org-element-property :raw-value sibling)
+                           new-title)))
         ;; narrow and return the matched headline
         (progn
           (org-narrow-to-subtree)
