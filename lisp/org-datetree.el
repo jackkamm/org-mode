@@ -35,6 +35,7 @@
 
 (require 'cal-iso)
 (require 'org)
+(require 'org-element)
 
 (defcustom org-datetree-add-timestamp nil
   "When non-nil, add a time stamp matching date of entry.
@@ -115,7 +116,8 @@ document quarter behavior, KEEP-RESTRICTION"
                        ((seq-set-equal-p time-grouping '(year month))
                         "DATE_TREE")
                        ((seq-set-equal-p time-grouping '(year week day))
-                        "WEEK_TREE"))))
+                        "WEEK_TREE")))
+         tree)
     (save-restriction
       ;; find the base level of the datetree, narrow, and goto top
       (if (eq keep-restriction 'subtree-at-point)
@@ -132,39 +134,36 @@ document quarter behavior, KEEP-RESTRICTION"
 	      (setq level (org-get-valid-level (org-current-level) 1))
 	      (org-narrow-to-subtree)))))
       (goto-char (point-min))
+      (setq tree (org-element-parse-buffer))
       ;; find/create entries for each datetree level
       (when (memq 'year time-grouping)
-        (org-datetree--find-create-subheading
-         "\\([12][0-9]\\{3\\}\\)"
-         (number-to-string nominal-year) level)
-        (org-narrow-to-subtree)
+        (setq tree (org-datetree--find-create-subheading
+                    "\\([12][0-9]\\{3\\}\\)"
+                    (number-to-string nominal-year) level tree))
         (setq level (1+ level)))
       (when (memq 'quarter time-grouping)
-        (org-datetree--find-create-subheading
-         "\\([12][0-9]\\{3\\}-Q[1-4]\\)"
-         (format "%d-Q%d" nominal-year quarter) level)
-        (org-narrow-to-subtree)
+        (setq tree (org-datetree--find-create-subheading
+                    "\\([12][0-9]\\{3\\}-Q[1-4]\\)"
+                    (format "%d-Q%d" nominal-year quarter) level tree))
         (setq level (1+ level)))
       (when (memq 'month time-grouping)
-        (org-datetree--find-create-subheading
-         "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+"
-         (format-time-string "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
-                                                         nominal-year))
-         level)
-        (org-narrow-to-subtree)
+        (setq tree (org-datetree--find-create-subheading
+                    "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+"
+                    (format-time-string "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
+                                                                    nominal-year))
+                    level tree))
         (setq level (1+ level)))
       (when (memq 'week time-grouping)
-        (org-datetree--find-create-subheading
-         "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)"
-         (format-time-string "%G-W%V" time) level)
-        (org-narrow-to-subtree)
+        (setq tree (org-datetree--find-create-subheading
+                    "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)"
+                    (format-time-string "%G-W%V" time) level tree))
         (setq level (1+ level)))
       (when (memq 'day time-grouping)
         ;; Use regular date instead of ISO-week year/month
-	(org-datetree--find-create-subheading
-         "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+"
-         (format-time-string "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
-         level)
+	(setq tree (org-datetree--find-create-subheading
+                    "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+"
+                    (format-time-string "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
+                    level tree))
         (when org-datetree-add-timestamp
           (save-excursion
             (end-of-line)
@@ -176,7 +175,7 @@ document quarter behavior, KEEP-RESTRICTION"
              (eq org-datetree-add-timestamp 'inactive))))))))
 
 (defun org-datetree--find-create-subheading
-    (sibling-regex new-title level)
+    (sibling-regex new-title level tree)
   "Find datetree subheading, or create it if it doesn't exist.
 SIBLING-REGEX should be a regex that matches the headline and its
 siblings, with 1 match group that captures the order of the
@@ -196,25 +195,25 @@ For example, if we want to find or create the headline for
     \"2024-12-27 Friday\")"
   ;; ensure that the first match group in SIBLING-REGEX
   ;; is the first inside `org-complex-heading-regexp-format'
-  (when (and (not (string-match-p "\\\\(\\?1:" sibling-regex))
-             (string-match "\\\\(" sibling-regex))
-    (setq sibling-regex (replace-match "\\(?1:" nil t sibling-regex)))
-  (let ((target-match (and (string-match sibling-regex new-title)
-                           (match-string 1 new-title)))
-        (re (format org-complex-heading-regexp-format
-                    sibling-regex))
-	match sibling-match)
-    (goto-char (point-min))
-    (while (and (setq match (re-search-forward re nil t))
-                (goto-char (match-beginning 1))
-                (setq sibling-match (match-string 1))
-                (or (string< sibling-match target-match)
-                    (not (= (org-reduced-level (org-current-level)) level)))))
-    (if match
-        (beginning-of-line)
+  (let* ((target-match (and (string-match sibling-regex new-title)
+                            (match-string 1 new-title)))
+         (sibling (org-element-map tree 'headline
+                    (lambda (d)
+                      (let ((title (org-element-property :title d)))
+                        (and (string-match sibling-regex title)
+                             (or (string< (match-string 1 title) target-match)
+                                 (not (= (org-element-property :level d) level)))
+                             d)))
+                    nil t 'headline)))
+    (if sibling
+        (goto-char (org-element-property :begin sibling))
       (goto-char (point-max))
       (unless (bolp) (insert "\n")))
-    (unless (and match (string= sibling-match target-match))
+    (unless (and sibling
+                 (string= (and (string-match sibling-regex
+                                             (org-element-property :title sibling))
+                               (match-string 1 (org-element-property :title sibling)))
+                          target-match))
       (delete-region (save-excursion (skip-chars-backward " \t\n") (point)) (point))
       (when (org--blank-before-heading-p) (insert "\n"))
       (insert
@@ -224,7 +223,9 @@ For example, if we want to find or create the headline for
                                       ?*)))
       (backward-char)
       (insert new-title)
-      (beginning-of-line))))
+      (beginning-of-line))
+    (org-narrow-to-subtree)
+    (car (org-element-contents (org-element-parse-buffer 'headline)))))
 
 (defun org-datetree-file-entry-under (txt d)
   "Insert a node TXT into the date tree under date D."
