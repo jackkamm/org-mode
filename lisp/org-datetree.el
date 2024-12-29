@@ -54,7 +54,7 @@ If KEEP-RESTRICTION is non-nil, do not widen the buffer.
 When it is nil, the buffer will be widened to make sure an existing date
 tree can be found.  If it is the symbol `subtree-at-point', then the tree
 will be built under the headline at point."
-  (org-datetree-find-create-entry d '(year month day) keep-restriction))
+  (org-datetree-find-create-entry '(year month day) d keep-restriction))
 
 ;;;###autoload
 (defun org-datetree-find-month-create (d &optional keep-restriction)
@@ -65,7 +65,7 @@ If KEEP-RESTRICTION is non-nil, do not widen the buffer.
 When it is nil, the buffer will be widened to make sure an existing date
 tree can be found.  If it is the symbol `subtree-at-point', then the tree
 will be built under the headline at point."
-  (org-datetree-find-create-entry d '(year month) keep-restriction))
+  (org-datetree-find-create-entry '(year month) d keep-restriction))
 
 ;;;###autoload
 (defun org-datetree-find-iso-week-create (d &optional keep-restriction)
@@ -76,11 +76,11 @@ KEEP-RESTRICTION is non-nil, do not widen the buffer.  When it is
 nil, the buffer will be widened to make sure an existing date
 tree can be found.  If it is the symbol `subtree-at-point', then
 the tree will be built under the headline at point."
-  (org-datetree-find-create-entry d '(year week day) keep-restriction))
+  (org-datetree-find-create-entry '(year week day) d keep-restriction))
 
 ;;;###autoload
 (defun org-datetree-find-create-entry
-    (d time-grouping &optional keep-restriction)
+    (time-grouping d &optional keep-restriction)
   "Find or create an entry for date D.
 TIME-GROUPING specifies the grouping levels of the datetree, and
 should be a subset of `(year quarter month week day)'.  Weeks are
@@ -220,7 +220,7 @@ tree placement via a property."
 	    (unless (org-at-heading-p) (error "Not at heading"))
 	    (widen)
 	    (org-narrow-to-subtree)
-            (setq tree (org-element-lineage (org-element-at-point) 'headline t)))
+            (setq tree (car (org-element-contents (org-element-parse-buffer 'headline)))))
         (unless keep-restriction (widen))
         ;; Support the old way of tree placement, using a property
         (let ((prop (and legacy-prop (org-find-property legacy-prop))))
@@ -228,7 +228,7 @@ tree placement via a property."
               (progn
                 (goto-char prop)
 	        (org-narrow-to-subtree)
-                (setq tree (org-element-lineage (org-element-at-point) 'headline t)))
+                (setq tree (car (org-element-contents (org-element-parse-buffer 'headline)))))
             (setq tree (org-element-parse-buffer)))))
       (cl-loop
        for pair in hier-pairs

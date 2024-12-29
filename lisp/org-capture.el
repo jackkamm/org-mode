@@ -1090,10 +1090,13 @@ Store them in the capture property list."
 	   ;; yesterday, if we are extending dates for a couple of
 	   ;; hours)
 	   (funcall
+            #'org-datetree-find-create-entry
 	    (pcase (org-capture-get :tree-type)
-	      (`week #'org-datetree-find-iso-week-create)
-	      (`month #'org-datetree-find-month-create)
-	      (_ #'org-datetree-find-date-create))
+	      (`week '(year week day))
+	      (`month '(year month))
+	      (`day '(year month day))
+              ((pred not) '(year month day))
+              (grouping grouping))
 	    (calendar-gregorian-from-absolute
 	     (cond
 	      (org-overriding-default-time

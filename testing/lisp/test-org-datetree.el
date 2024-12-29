@@ -169,7 +169,7 @@
       "\\`\\* 2012\n\n\\*\\* 2012-Q1\n\n\\*\\*\\* 2012-03 .*\\'"
       (org-test-with-temp-text ""
         (let ((org-datetree-add-timestamp nil))
-	  (org-datetree-find-create-entry '(3 29 2012) '(year quarter month)))
+	  (org-datetree-find-create-entry '(year quarter month) '(3 29 2012)))
         (org-trim (buffer-string)))))))
 
 (ert-deftest test-org-datetree/find-quarter-month-day-create ()
@@ -181,7 +181,7 @@
       "\\`\\* 2012\n\n\\*\\* 2012-Q1\n\n\\*\\*\\* 2012-03 .*\n\n\\*\\*\\*\\* 2012-03-29 .*\\'"
       (org-test-with-temp-text ""
         (let ((org-datetree-add-timestamp nil))
-	  (org-datetree-find-create-entry '(3 29 2012) '(year quarter month day)))
+	  (org-datetree-find-create-entry '(year quarter month day) '(3 29 2012)))
         (org-trim (buffer-string)))))))
 
 (ert-deftest test-org-datetree/find-quarter-week-create ()
@@ -193,7 +193,7 @@
       "\\`\\* 2024\n\n\\*\\* 2024-Q4\n\n\\*\\*\\* 2024-W52\\'"
       (org-test-with-temp-text ""
         (let ((org-datetree-add-timestamp nil))
-	  (org-datetree-find-create-entry '(12 27 2024) '(year quarter week)))
+	  (org-datetree-find-create-entry '(year quarter week) '(12 27 2024)))
         (org-trim (buffer-string)))))))
 
 (ert-deftest test-org-datetree/find-month-week-create ()
@@ -205,7 +205,7 @@
       "\\`\\* 2024\n\n\\*\\* 2024-12 .*\n\n\\*\\*\\* 2024-W52\\'"
       (org-test-with-temp-text ""
         (let ((org-datetree-add-timestamp nil))
-	  (org-datetree-find-create-entry '(12 27 2024) '(year month week)))
+	  (org-datetree-find-create-entry '(year month week) '(12 27 2024)))
         (org-trim (buffer-string)))))))
 
 (ert-deftest test-org-datetree/find-iso-week-create ()
