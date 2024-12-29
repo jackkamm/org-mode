@@ -202,10 +202,12 @@ For example, if we want to find or create the headline for
                                  (= (org-element-property :level d) level))
                              d)))
                     nil t)))
+    ;; go to headline, or first successor sibling, or end of buffer
     (if sibling
         (goto-char (org-element-property :begin sibling))
       (goto-char (point-max))
       (unless (bolp) (insert "\n")))
+    ;; if headline wasn't found, insert it, and move point to its start
     (unless (and sibling
                  (string= (and (string-match sibling-regex
                                              (org-element-property :raw-value sibling))
@@ -221,6 +223,7 @@ For example, if we want to find or create the headline for
       (backward-char)
       (insert new-title)
       (beginning-of-line))
+    ;; narrow to subtree and return its ast
     (org-narrow-to-subtree)
     (car (org-element-contents (org-element-parse-buffer 'headline)))))
 
