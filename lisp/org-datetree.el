@@ -107,16 +107,57 @@ document quarter behavior, KEEP-RESTRICTION"
          (quarter (if (and (memq 'week time-grouping)
                            (not (memq 'month time-grouping)))
                       (min 4 (1+ (/ (1- week) 13)))
-                    (1+ (/ (1- nominal-month) 3))))
-         ;; Support the old way of tree placement, using a property
-         (legacy-prop (cond
-                       ((seq-set-equal-p time-grouping '(year month day))
-                        "DATE_TREE")
-                       ((seq-set-equal-p time-grouping '(year month))
-                        "DATE_TREE")
-                       ((seq-set-equal-p time-grouping '(year week day))
-                        "WEEK_TREE")))
-         tree)
+                    (1+ (/ (1- nominal-month) 3)))))
+    (org-datetree-find-create-hierarchy
+     (append
+      (when (memq 'year time-grouping)
+        (list (list (number-to-string nominal-year)
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}\\)"))))
+      (when (memq 'quarter time-grouping)
+        (list (list (format "%d-Q%d" nominal-year quarter)
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}-Q[1-4]\\)"))))
+      (when (memq 'month time-grouping)
+        (list (list (format-time-string
+                     "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
+                                                 nominal-year))
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+"))))
+      (when (memq 'week time-grouping)
+        (list (list (format-time-string "%G-W%V" time)
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)"))))
+      (when (memq 'day time-grouping)
+        ;; Use regular date instead of ISO-week year/month
+        (list (list (format-time-string
+                     "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
+                    (org-datetree--compare-fun-from-regex
+                     "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+")))))
+     keep-restriction
+     ;; Support the old way of tree placement, using a property
+     (cond
+      ((seq-set-equal-p time-grouping '(year month day))
+       "DATE_TREE")
+      ((seq-set-equal-p time-grouping '(year month))
+       "DATE_TREE")
+      ((seq-set-equal-p time-grouping '(year week day))
+       "WEEK_TREE")))
+    (when (memq 'day time-grouping)
+      (when org-datetree-add-timestamp
+        (save-excursion
+          (end-of-line)
+          (insert "\n")
+          (org-indent-line)
+          (org-insert-timestamp
+           (org-encode-time 0 0 0 day month year)
+           nil
+           (eq org-datetree-add-timestamp 'inactive)))))))
+
+(defun org-datetree-find-create-hierarchy
+    (hier-pairs &optional keep-restriction legacy-prop)
+  "TODO"
+  (let (tree)
     (save-restriction
       ;; get the datetree base and narrow to it
       (if (eq keep-restriction 'subtree-at-point)
@@ -133,45 +174,13 @@ document quarter behavior, KEEP-RESTRICTION"
 	        (org-narrow-to-subtree)
                 (setq tree (org-element-lineage (org-element-at-point) 'headline t)))
             (setq tree (org-element-parse-buffer)))))
-      ;; find/create entries for each datetree level
-      (when (memq 'year time-grouping)
-        (setq tree (org-datetree--find-create-subheading
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}\\)")
-                    (number-to-string nominal-year) tree)))
-      (when (memq 'quarter time-grouping)
-        (setq tree (org-datetree--find-create-subheading
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}-Q[1-4]\\)")
-                    (format "%d-Q%d" nominal-year quarter) tree)))
-      (when (memq 'month time-grouping)
-        (setq tree (org-datetree--find-create-subheading
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+")
-                    (format-time-string "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
-                                                                    nominal-year))
-                    tree)))
-      (when (memq 'week time-grouping)
-        (setq tree (org-datetree--find-create-subheading
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)")
-                    (format-time-string "%G-W%V" time) tree)))
-      (when (memq 'day time-grouping)
-        ;; Use regular date instead of ISO-week year/month
-	(setq tree (org-datetree--find-create-subheading
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+")
-                    (format-time-string "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
-                    tree))
-        (when org-datetree-add-timestamp
-          (save-excursion
-            (end-of-line)
-            (insert "\n")
-            (org-indent-line)
-            (org-insert-timestamp
-             (org-encode-time 0 0 0 day month year)
-             nil
-             (eq org-datetree-add-timestamp 'inactive))))))))
+      (cl-loop
+       for pair in hier-pairs
+       do
+       (setq tree
+             (org-datetree--find-create-subheading
+              (cadr pair) (car pair) tree)))
+      tree)))
 
 (defun org-datetree--compare-fun-from-regex (sibling-regex)
   "TODO"
