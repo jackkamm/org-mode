@@ -212,11 +212,11 @@ For example, if we want to find or create the headline for
                                          (org-element-property :raw-value sibling))
                            (match-string 1 (org-element-property :raw-value sibling)))
                       target-match))
-        ;; return the matched headline
+        ;; narrow and return the matched headline
         (progn
           (org-narrow-to-subtree)
           sibling)
-      ;; insert new headline and return it
+      ;; insert new headline, narrow, and return it
       (delete-region (save-excursion (skip-chars-backward " \t\n") (point)) (point))
       (when (org--blank-before-heading-p) (insert "\n"))
       (insert
