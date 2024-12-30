@@ -254,14 +254,16 @@ tree placement via a property."
     (compare-fun new-title level)
   "Find datetree subheading, or create it if it doesn't exist.
 After insertion, move point to beginning of the subheading, and
-narrow to its subtree.  NEW-TITLE is the title of the subheading
-to be found or created.  LEVEL is the level of the headline to be
-found or created.  COMPARE-FUN is a function of 2 arguments for
-comparing headline titles; it should return a negative number if
-the first headline precedes the second, a positive number if the
-second number has precedence, 0 if the headlines are at the same
-time, and `nil' if a headline isn't a valid datetree subheading
-at this level."
+narrow to its subtree.  Returns non-nil if the heading was found,
+or nil if a new heading was created.
+
+NEW-TITLE is the title of the subheading to be found or created.
+LEVEL is the level of the headline to be found or created.
+COMPARE-FUN is a function of 2 arguments for comparing headline
+titles; it should return a negative number if the first headline
+precedes the second, a positive number if the second number has
+precedence, 0 if the headlines are at the same time, and `nil' if
+a headline isn't a valid datetree subheading at this level."
   (let* ((nstars (if org-odd-levels-only (1- (* 2 level)) level))
          (heading-re (format "^\\*\\{%d\\}" nstars))
          (sibling (car (org-element-cache-map
