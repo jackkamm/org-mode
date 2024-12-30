@@ -191,7 +191,7 @@ Each entry of the list is a pair, the car is the headline for that level
 (e.g. \"2024\" or \"2024-12-28\"), and the cadr is a string
 comparison function for sorting each headline among its siblings.
 The comparison function should take 2 arguments, corresponding to
-the titles of 2 headlines, and return a negative number of the
+the titles of 2 headlines, and return a negative number if the
 first headline precedes the second, a positive number of the
 second has precedence, 0 if the headlines are at the same time,
 or `nil' if a headline isn't a valid datetree subheading.  For
@@ -202,7 +202,7 @@ example, HIER-PAIRS could look like
     (\"2024-12-28 Saturday\" compare-day-fun))
 
 where compare-month-fun would be some function where
-(compare-month-fun \"2024-12-December\" \"2024-12-November\") is
+(compare-month-fun \"2024-11 November\" \"2024-12 December\") is
 negative, and (compare-month-fun \"2024-12-December\" \"Potato\")
 is nil.
 
@@ -214,7 +214,7 @@ will be built under the headline at point.
 If LEGACY-PROP is non-nil, the tree is located by searching for a
 headline with property LEGACY-PROP, supporting the old way of
 tree placement via a property."
-  (let (tree)
+  (let ((level 1))
     (save-restriction
       ;; get the datetree base and narrow to it
       (if (eq keep-restriction 'subtree-at-point)
@@ -222,48 +222,50 @@ tree placement via a property."
 	    (unless (org-at-heading-p) (error "Not at heading"))
 	    (widen)
 	    (org-narrow-to-subtree)
-            (setq tree (car (org-element-contents (org-element-parse-buffer 'headline)))))
+            (setq level (org-get-valid-level (org-current-level) 1)))
         (unless keep-restriction (widen))
         ;; Support the old way of tree placement, using a property
         (let ((prop (and legacy-prop (org-find-property legacy-prop))))
-          (if prop
+          (when prop
               (progn
                 (goto-char prop)
 	        (org-narrow-to-subtree)
-                (setq tree (car (org-element-contents (org-element-parse-buffer 'headline)))))
-            (setq tree (org-element-parse-buffer)))))
+                (setq level (org-get-valid-level (org-current-level) 1))))))
       (cl-loop
        for pair in hier-pairs
        do
-       (setq tree
-             (org-datetree--find-create-subheading
-              (cadr pair) (car pair) tree)))
-      tree)))
+       (org-datetree--find-create-subheading
+              (cadr pair) (car pair) level)
+       (setq level (1+ level))))))
 
 (defun org-datetree--find-create-subheading
-    (compare-fun new-title tree)
+    (compare-fun new-title level)
   "Find datetree subheading, or create it if it doesn't exist.
 After insertion, move point to beginning of the subheading, and
-narrow to its subtree.  NEW-TITLE is the subheading to be found
-or created.  TREE is the parent headline, or an element of type
-`org-data' if NEW-TITLE is to be at level 1.  COMPARE-FUN is a
-function of 2 arguments for comparing headline titles; it should
-return a negative number if the first headline precedes the
-second, a positive number if the second number has precedence, 0
-if the headlines are at the same time, and `nil' if a headline
-isn't a valid datetree subheading at this level."
-  (let* ((level (if (eq (org-element-type tree) 'org-data)
-                    1
-                  (1+ (org-element-property :level tree))))
-         (sibling (org-element-map tree 'headline
-                    (lambda (d)
-                      (when (= (org-element-property :level d) level)
-                        (let ((compare-result
-                               (funcall compare-fun
-                                        (org-element-property :raw-value d)
-                                        new-title)))
-                          (and compare-result (>= compare-result 0) d))))
-                    nil t)))
+narrow to its subtree.  NEW-TITLE is the title of the subheading
+to be found or created.  LEVEL is the level of the headline to be
+found or created.  COMPARE-FUN is a function of 2 arguments for
+comparing headline titles; it should return a negative number if
+the first headline precedes the second, a positive number if the
+second number has precedence, 0 if the headlines are at the same
+time, and `nil' if a headline isn't a valid datetree subheading
+at this level."
+  (let* ((nstars (if org-odd-levels-only (1- (* 2 level)) level))
+         (heading-re (format "^\\*\\{%d\\}" nstars))
+         (sibling (car (org-element-cache-map
+                        (lambda (d)
+                          (when (= (org-element-property :level d) level)
+                            (let ((compare-result
+                                   (funcall compare-fun
+                                            (org-element-property :raw-value d)
+                                            new-title)))
+                              (and compare-result (>= compare-result 0) d))))
+                        :granularity 'headline
+                        :restrict-elements '(headline)
+                        :next-re heading-re
+                        :fail-re heading-re
+                        :narrow t
+                        :limit-count 1))))
     ;; go to headline, or first successor sibling, or end of buffer
     (if sibling
         (goto-char (org-element-property :begin sibling))
@@ -282,7 +284,7 @@ isn't a valid datetree subheading at this level."
       (when (org--blank-before-heading-p) (insert "\n"))
       (insert
        (format "\n%s %s\n"
-               (make-string (if org-odd-levels-only (1- (* 2 level)) level) ?*)
+               (make-string nstars ?*)
                new-title))
       (forward-line -1)
       (org-narrow-to-subtree)
