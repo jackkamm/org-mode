@@ -91,6 +91,15 @@
         (let ((org-datetree-add-timestamp 'inactive))
 	  (org-datetree-find-date-create '(3 29 2012)))
         (org-trim (buffer-string)))))
+    ;; don't add the timestamp twice
+    (should
+     (string-match
+      "\\`\\* 2012\n\n\\*\\* 2012-03 .*\n\n\\*\\*\\* \\(2012-03-29\\) .*\n[ \t]*<\\1.*?>\\'"
+      (org-test-with-temp-text "* 2012\n"
+        (let ((org-datetree-add-timestamp t))
+	  (org-datetree-find-date-create '(3 29 2012))
+          (org-datetree-find-date-create '(3 29 2012)))
+        (org-trim (buffer-string)))))
     ;; Insert at top level, unless some node has DATE_TREE property.  In
     ;; this case, date tree becomes one of its sub-trees.
     (should

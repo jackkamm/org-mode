@@ -84,6 +84,8 @@ the tree will be built under the headline at point."
 (defun org-datetree-find-create-entry
     (time-grouping d &optional keep-restriction)
   "Find or create an entry for date D.
+Moves point to the beginning of the entry.
+
 TIME-GROUPING specifies the grouping levels of the datetree, and
 should be a subset of `(year quarter month week day)'.  Weeks are
 assigned to years according to ISO-8601.  If TIME-GROUPING
@@ -96,7 +98,11 @@ otherwise they are defined as 3-month periods.
 If KEEP-RESTRICTION is non-nil, do not widen the buffer.  When it
 is nil, the buffer will be widened to make sure an existing date
 tree can be found.  If it is the symbol `subtree-at-point', then
-the tree will be built under the headline at point."
+the tree will be built under the headline at point.
+
+If `org-datetree-add-timestamp' is non-nil and TIME-GROUPING
+includes `day' and a new entry is created, adds a time stamp
+after the new headline."
   (let* ((year (calendar-extract-year d))
 	 (month (calendar-extract-month d))
 	 (day (calendar-extract-day d))
@@ -119,44 +125,45 @@ the tree will be built under the headline at point."
          (quarter (if (and (memq 'week time-grouping)
                            (not (memq 'month time-grouping)))
                       (min 4 (1+ (/ (1- week) 13)))
-                    (1+ (/ (1- nominal-month) 3)))))
-    (org-datetree-find-create-hierarchy
-     (append
-      (when (memq 'year time-grouping)
-        (list (list (number-to-string nominal-year)
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}\\)"))))
-      (when (memq 'quarter time-grouping)
-        (list (list (format "%d-Q%d" nominal-year quarter)
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}-Q[1-4]\\)"))))
-      (when (memq 'month time-grouping)
-        (list (list (format-time-string
-                     "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
-                                                 nominal-year))
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+"))))
-      (when (memq 'week time-grouping)
-        (list (list (format-time-string "%G-W%V" time)
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)"))))
-      (when (memq 'day time-grouping)
-        ;; Use regular date instead of ISO-week year/month
-        (list (list (format-time-string
-                     "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
-                    (org-datetree--compare-fun-from-regex
-                     "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+")))))
-     keep-restriction
-     ;; Support the old way of tree placement, using a property
-     (cond
-      ((seq-set-equal-p time-grouping '(year month day))
-       "DATE_TREE")
-      ((seq-set-equal-p time-grouping '(year month))
-       "DATE_TREE")
-      ((seq-set-equal-p time-grouping '(year week day))
-       "WEEK_TREE")))
+                    (1+ (/ (1- nominal-month) 3))))
+         (found-p
+          (org-datetree-find-create-hierarchy
+           (append
+            (when (memq 'year time-grouping)
+              (list (list (number-to-string nominal-year)
+                          (org-datetree--compare-fun-from-regex
+                           "\\([12][0-9]\\{3\\}\\)"))))
+            (when (memq 'quarter time-grouping)
+              (list (list (format "%d-Q%d" nominal-year quarter)
+                          (org-datetree--compare-fun-from-regex
+                           "\\([12][0-9]\\{3\\}-Q[1-4]\\)"))))
+            (when (memq 'month time-grouping)
+              (list (list (format-time-string
+                           "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
+                                                       nominal-year))
+                          (org-datetree--compare-fun-from-regex
+                           "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+"))))
+            (when (memq 'week time-grouping)
+              (list (list (format-time-string "%G-W%V" time)
+                          (org-datetree--compare-fun-from-regex
+                           "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)"))))
+            (when (memq 'day time-grouping)
+              ;; Use regular date instead of ISO-week year/month
+              (list (list (format-time-string
+                           "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
+                          (org-datetree--compare-fun-from-regex
+                           "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+")))))
+           keep-restriction
+           ;; Support the old way of tree placement, using a property
+           (cond
+            ((seq-set-equal-p time-grouping '(year month day))
+             "DATE_TREE")
+            ((seq-set-equal-p time-grouping '(year month))
+             "DATE_TREE")
+            ((seq-set-equal-p time-grouping '(year week day))
+             "WEEK_TREE")))))
     (when (memq 'day time-grouping)
-      (when org-datetree-add-timestamp
+      (when (and (not found-p) org-datetree-add-timestamp)
         (save-excursion
           (end-of-line)
           (insert "\n")
@@ -184,18 +191,21 @@ lexicographic ordering of match group 1."
 
 (defun org-datetree-find-create-hierarchy
     (hier-pairs &optional keep-restriction legacy-prop)
-  "Insert a new entry into a datetree from the entry's full date hierarchy.
+  "Find or create entry in datetree using the full date hierarchy.
+Moves point to the beginning of the entry.  Returns non-nil if an
+existing entry was found, or nil if a new entry was created.
+
 HIER-PAIRS is a list whose first entry corresponds to the outermost element
 (e.g. year) and last entry corresponds to the innermost (e.g. day).
 Each entry of the list is a pair, the car is the headline for that level
-(e.g. \"2024\" or \"2024-12-28\"), and the cadr is a string
-comparison function for sorting each headline among its siblings.
-The comparison function should take 2 arguments, corresponding to
-the titles of 2 headlines, and return a negative number if the
-first headline precedes the second, a positive number of the
-second has precedence, 0 if the headlines are at the same time,
-or `nil' if a headline isn't a valid datetree subheading.  For
-example, HIER-PAIRS could look like
+(e.g. \"2024\" or \"2024-12-28 Saturday\"), and the cadr is a
+string comparison function for sorting each headline among its
+siblings.  The comparison function should take 2 arguments,
+corresponding to the titles of 2 headlines, and return a negative
+number if the first headline is earlier, a positive number if the
+second headline is earlier, 0 if the headlines are at the same
+time, or `nil' if a headline isn't a valid datetree subheading.
+For example, HIER-PAIRS could look like
 
    ((\"2024\" compare-year-fun)
     (\"2024-12 December\" compare-month-fun)
@@ -214,7 +224,8 @@ will be built under the headline at point.
 If LEGACY-PROP is non-nil, the tree is located by searching for a
 headline with property LEGACY-PROP, supporting the old way of
 tree placement via a property."
-  (let ((level 1))
+  (let ((level 1)
+        found-p)
     (save-restriction
       ;; get the datetree base and narrow to it
       (if (eq keep-restriction 'subtree-at-point)
@@ -227,16 +238,17 @@ tree placement via a property."
         ;; Support the old way of tree placement, using a property
         (let ((prop (and legacy-prop (org-find-property legacy-prop))))
           (when prop
-              (progn
-                (goto-char prop)
-	        (org-narrow-to-subtree)
-                (setq level (org-get-valid-level (org-current-level) 1))))))
+            (progn
+              (goto-char prop)
+	      (org-narrow-to-subtree)
+              (setq level (org-get-valid-level (org-current-level) 1))))))
       (cl-loop
        for pair in hier-pairs
        do
-       (org-datetree--find-create-subheading
-              (cadr pair) (car pair) level)
-       (setq level (1+ level))))))
+       (setq found-p (org-datetree--find-create-subheading
+                      (cadr pair) (car pair) level))
+       (setq level (1+ level))))
+    found-p))
 
 (defun org-datetree--find-create-subheading
     (compare-fun new-title level)
@@ -278,7 +290,7 @@ at this level."
         ;; narrow and return the matched headline
         (progn
           (org-narrow-to-subtree)
-          sibling)
+          t)
       ;; insert new headline, narrow, and return it
       (delete-region (save-excursion (skip-chars-backward " \t\n") (point)) (point))
       (when (org--blank-before-heading-p) (insert "\n"))
@@ -288,7 +300,7 @@ at this level."
                new-title))
       (forward-line -1)
       (org-narrow-to-subtree)
-      (org-element-at-point))))
+      nil)))
 
 (defun org-datetree-file-entry-under (txt d)
   "Insert a node TXT into the date tree under date D."
