@@ -182,7 +182,7 @@ The generated comparison function can be used with
 `org-datetree-find-create-hierarchy'.  SIBLING-REGEX should be a
 regex that matches the headline and its siblings, with 1 match
 group.  Headlines are compared on the lexicographic ordering of
-match group 1, using `string-compare'.  The return value is
+match group 1, using `compare-strings'.  The return value is
 negative if the first argument is earlier, positive if later, t
 if equal, or nil if either argument doesn't match."
   (lambda (sibling-title new-title)
