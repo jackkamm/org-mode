@@ -103,6 +103,9 @@ the tree will be built under the headline at point.
 If `org-datetree-add-timestamp' is non-nil and TIME-GROUPING
 includes `day' and a new entry is created, adds a time stamp
 after the new headline."
+  (when-let ((setdiff (seq-difference time-grouping
+                                      '(year quarter month week day))))
+    (error (format "Unrecognized datetree grouping elements %s" setdiff)))
   (let* ((year (calendar-extract-year d))
 	 (month (calendar-extract-month d))
 	 (day (calendar-extract-day d))
@@ -131,27 +134,27 @@ after the new headline."
            (append
             (when (memq 'year time-grouping)
               (list (list (number-to-string nominal-year)
-                          (org-datetree--compare-fun-from-regex
+                          (org-datetree-comparefun-from-regex
                            "\\([12][0-9]\\{3\\}\\)"))))
             (when (memq 'quarter time-grouping)
               (list (list (format "%d-Q%d" nominal-year quarter)
-                          (org-datetree--compare-fun-from-regex
+                          (org-datetree-comparefun-from-regex
                            "\\([12][0-9]\\{3\\}-Q[1-4]\\)"))))
             (when (memq 'month time-grouping)
               (list (list (format-time-string
                            "%Y-%m %B" (org-encode-time 0 0 0 1 nominal-month
                                                        nominal-year))
-                          (org-datetree--compare-fun-from-regex
+                          (org-datetree-comparefun-from-regex
                            "\\([12][0-9]\\{3\\}-[01][0-9]\\) \\w+"))))
             (when (memq 'week time-grouping)
               (list (list (format-time-string "%G-W%V" time)
-                          (org-datetree--compare-fun-from-regex
+                          (org-datetree-comparefun-from-regex
                            "\\([12][0-9]\\{3\\}-W[0-5][0-9]\\)"))))
             (when (memq 'day time-grouping)
               ;; Use regular date instead of ISO-week year/month
               (list (list (format-time-string
                            "%Y-%m-%d %A" (org-encode-time 0 0 0 day month year))
-                          (org-datetree--compare-fun-from-regex
+                          (org-datetree-comparefun-from-regex
                            "\\([12][0-9]\\{3\\}-[01][0-9]-[0123][0-9]\\) \\w+")))))
            keep-restriction
            ;; Support the old way of tree placement, using a property
@@ -173,11 +176,15 @@ after the new headline."
            nil
            (eq org-datetree-add-timestamp 'inactive)))))))
 
-(defun org-datetree--compare-fun-from-regex (sibling-regex)
+(defun org-datetree-comparefun-from-regex (sibling-regex)
   "Construct comparison function based on regular expression.
-SIBLING-REGEX should be a regex that matches the headline and its
-siblings, with 1 match group.  Headlines are compared by the
-lexicographic ordering of match group 1."
+The generated comparison function can be used with
+`org-datetree-find-create-hierarchy'.  SIBLING-REGEX should be a
+regex that matches the headline and its siblings, with 1 match
+group.  Headlines are compared by the lexicographic ordering of
+match group 1.  The generated function returns -1 if the first
+argument is earlier, 1 if later, 0 if equal, or nil if either
+argument doesn't match."
   (lambda (sibling-title new-title)
     (let ((target-match (and (string-match sibling-regex new-title)
                              (match-string 1 new-title)))
@@ -203,9 +210,9 @@ string comparison function for sorting each headline among its
 siblings.  The comparison function should take 2 arguments,
 corresponding to the titles of 2 headlines, and return a negative
 number if the first headline is earlier, a positive number if the
-second headline is earlier, 0 if the headlines are at the same
-time, or `nil' if a headline isn't a valid datetree subheading.
-For example, HIER-PAIRS could look like
+second headline is earlier, 0 or t if the headlines are at the
+same time, or `nil' if a headline isn't a valid datetree
+subheading.  For example, HIER-PAIRS could look like
 
    ((\"2024\" compare-year-fun)
     (\"2024-12 December\" compare-month-fun)
@@ -214,7 +221,8 @@ For example, HIER-PAIRS could look like
 where compare-month-fun would be some function where
 (compare-month-fun \"2024-11 November\" \"2024-12 December\") is
 negative, and (compare-month-fun \"2024-12-December\" \"Potato\")
-is nil.
+is nil.  One way to construct such a comparison function is with
+`org-datetree-comparefun-from-regex'.
 
 If KEEP-RESTRICTION is non-nil, do not widen the buffer.
 When it is nil, the buffer will be widened to make sure an existing date
@@ -262,8 +270,8 @@ LEVEL is the level of the headline to be found or created.
 COMPARE-FUN is a function of 2 arguments for comparing headline
 titles; it should return a negative number if the first headline
 precedes the second, a positive number if the second number has
-precedence, 0 if the headlines are at the same time, and `nil' if
-a headline isn't a valid datetree subheading at this level."
+precedence, 0 or t if the headlines are at the same time, and nil
+if a headline isn't a valid datetree subheading at this level."
   (let* ((nstars (if org-odd-levels-only (1- (* 2 level)) level))
          (heading-re (format "^\\*\\{%d\\}" nstars))
          (sibling (car (org-element-cache-map
@@ -273,7 +281,9 @@ a headline isn't a valid datetree subheading at this level."
                                    (funcall compare-fun
                                             (org-element-property :raw-value d)
                                             new-title)))
-                              (and compare-result (>= compare-result 0) d))))
+                              (and compare-result
+                                   (or (eq compare-result t) (>= compare-result 0))
+                                   d))))
                         :granularity 'headline
                         :restrict-elements '(headline)
                         :next-re heading-re
@@ -286,9 +296,10 @@ a headline isn't a valid datetree subheading at this level."
       (goto-char (point-max))
       (unless (bolp) (insert "\n")))
     (if (and sibling
-             (= 0 (funcall compare-fun
-                           (org-element-property :raw-value sibling)
-                           new-title)))
+             (memq (funcall compare-fun
+                            (org-element-property :raw-value sibling)
+                            new-title)
+                   '(0 t)))
         ;; narrow and return the matched headline
         (progn
           (org-narrow-to-subtree)

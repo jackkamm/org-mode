@@ -8187,6 +8187,11 @@ Now lets look at the elements of a template definition.  Each entry in
     rule.  In case ~quarter~ and ~week~ but not ~month~ are specified,
     quarters are 13-week periods; otherwise they are 3-month periods.
 
+    #+findex: org-datetree-find-create-hierarchy
+    ~:tree-type~ can also be a function, in which it should take the
+    date as an argument and generate a list of pairs for
+    ~org-datetree-find-create-hierarchy~.
+
   - ~:unnarrowed~ ::
 
     Do not narrow the target buffer, simply show the full buffer.

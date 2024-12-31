@@ -324,6 +324,51 @@
 	  (insert "Capture text")
 	  (org-capture-finalize)))
       (buffer-string))))
+  ;; test datetree capture with list tree-type
+  (should
+   (equal
+    "* A\n** B\n*** 2024\n**** 2024-Q2\n***** 2024-06 June\n****** 2024-06-16 Sunday\n******* H1 Capture text\n** C\n"
+    (org-test-with-temp-text-in-file "* A\n** B\n** C\n"
+      (let* ((file (buffer-file-name))
+            (org-capture-templates
+             `(("t"
+                 "Todo"
+                 entry
+                 (file+olp+datetree ,file (lambda ()
+                                            (should (equal ,file (buffer-file-name)))
+                                            '("A" "B")))
+                 "* H1 %?"
+                 :tree-type
+                 (year quarter month day)))))
+       (org-test-at-time "2024-06-16"
+                         (org-capture nil "t")
+                         (insert "Capture text")
+                         (org-capture-finalize)))
+      (buffer-string))))
+  ;; test datetree capture with function tree-type
+  (should
+   (equal
+    "* A\n** B\n*** 2024\n**** 06\n***** 16\n****** H1 Capture text\n** C\n"
+    (org-test-with-temp-text-in-file "* A\n** B\n** C\n"
+      (let* ((file (buffer-file-name))
+            (org-capture-templates
+             `(("t"
+                 "Todo"
+                 entry
+                 (file+olp+datetree ,file (lambda ()
+                                            (should (equal ,file (buffer-file-name)))
+                                            '("A" "B")))
+                 "* H1 %?"
+                 :tree-type
+                 (lambda (d)
+                   `((,(format "%d" (calendar-extract-year d)) compare-strings)
+                     (,(format "%02d" (calendar-extract-month d)) compare-strings)
+                     (,(format "%02d" (calendar-extract-day d)) compare-strings)))))))
+       (org-test-at-time "2024-06-16"
+                         (org-capture nil "t")
+                         (insert "Capture text")
+                         (org-capture-finalize)))
+      (buffer-string))))
   (should
    (equal
     "* A\n** B\n*** 2024\n**** 2024-06 June\n***** 2024-06-16 Sunday\n****** H1 Capture text\n** C\n"
