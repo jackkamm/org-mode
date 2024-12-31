@@ -348,7 +348,7 @@
   ;; test datetree capture with function tree-type
   (should
    (equal
-    "* A\n** B\n*** 2024\n**** 06\n***** 16\n****** H1 Capture text\n** C\n"
+    "* A\n** B\n*** 2024\n**** 06\n***** 16\n****** H1 Capture text\n****** H1 Capture text 2\n** C\n"
     (org-test-with-temp-text-in-file "* A\n** B\n** C\n"
       (let* ((file (buffer-file-name))
             (org-capture-templates
@@ -361,12 +361,18 @@
                  "* H1 %?"
                  :tree-type
                  (lambda (d)
-                   `((,(format "%d" (calendar-extract-year d)) compare-strings)
-                     (,(format "%02d" (calendar-extract-month d)) compare-strings)
-                     (,(format "%02d" (calendar-extract-day d)) compare-strings)))))))
+                   `((,(format "%d" (calendar-extract-year d))
+                      (lambda (x y) (compare-strings x nil nil y nil nil)))
+                     (,(format "%02d" (calendar-extract-month d))
+                      (lambda (x y) (compare-strings x nil nil y nil nil)))
+                     (,(format "%02d" (calendar-extract-day d))
+                      (lambda (x y) (compare-strings x nil nil y nil nil)))))))))
        (org-test-at-time "2024-06-16"
                          (org-capture nil "t")
                          (insert "Capture text")
+                         (org-capture-finalize)
+                         (org-capture nil "t")
+                         (insert "Capture text 2")
                          (org-capture-finalize)))
       (buffer-string))))
   (should
