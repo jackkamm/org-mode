@@ -181,18 +181,20 @@ after the new headline."
 The generated comparison function can be used with
 `org-datetree-find-create-hierarchy'.  SIBLING-REGEX should be a
 regex that matches the headline and its siblings, with 1 match
-group.  Headlines are compared on the lexicographic ordering of
-match group 1, using `compare-strings'.  The return value is
-negative if the first argument is earlier, positive if later, t
-if equal, or nil if either argument doesn't match."
+group.  Headlines are compared by the lexicographic ordering of
+match group 1.  The generated function returns -1 if the first
+argument is earlier, 1 if later, 0 if equal, or nil if either
+argument doesn't match."
   (lambda (sibling-title new-title)
     (let ((target-match (and (string-match sibling-regex new-title)
                              (match-string 1 new-title)))
           (sibling-match (and (string-match sibling-regex sibling-title)
                               (match-string 1 sibling-title))))
-      (and target-match sibling-match
-           (compare-strings sibling-match nil nil
-                            target-match nil nil)))))
+      (cond
+       ((not (and target-match sibling-match)) nil)
+       ((string< sibling-match target-match) -1)
+       ((string> sibling-match target-match) 1)
+       (t 0)))))
 
 (defun org-datetree-find-create-hierarchy
     (hier-pairs &optional keep-restriction legacy-prop)
