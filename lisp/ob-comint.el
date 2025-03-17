@@ -313,7 +313,7 @@ STRING contains the output originally inserted into the comint buffer."
 			    (save-excursion
 			      (goto-char (point-min))
 			      (when (search-forward tmp-file nil t)
-			        (org-babel-previous-src-block)
+                                (org-babel-previous-src-block-or-inline)
                                 (let* ((info (org-babel-get-src-block-info))
                                        (params (nth 2 info))
                                        (result-params
@@ -364,7 +364,7 @@ STRING contains the output originally inserted into the comint buffer."
 			       (save-excursion
 			         (goto-char (point-min))
 			         (when (search-forward uuid nil t)
-				   (org-babel-previous-src-block)
+				   (org-babel-previous-src-block-or-inline)
                                    (let* ((info (org-babel-get-src-block-info))
                                           (params (nth 2 info))
                                           (result-params

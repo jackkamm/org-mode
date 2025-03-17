@@ -2114,6 +2114,12 @@ With optional prefix argument ARG, jump backward ARG many source blocks."
   (interactive "p")
   (org-previous-block arg org-babel-src-block-regexp))
 
+(defun org-babel-previous-src-block-or-inline ()
+  "Jump to previous source block or inline block."
+  (re-search-backward (rx (or (regexp org-babel-src-block-regexp)
+                              ;; copied from `org-element-inline-src-block-parser'.
+                              (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))))
+
 (defvar org-babel-load-languages)
 
 ;;;###autoload
