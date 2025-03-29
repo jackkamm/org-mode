@@ -2114,11 +2114,24 @@ With optional prefix argument ARG, jump backward ARG many source blocks."
   (interactive "p")
   (org-previous-block arg org-babel-src-block-regexp))
 
-(defun org-babel-previous-src-block-or-inline ()
+;; this works for what I need but is not quite what is described in
+;; the title. It stops if the current point is at a src block
+;;
+;; TODO: See also org-babel-where-is-src-block-result. Would be good
+;; to use that function. Other related functions like
+;; org-babel-read-result are also interesting.
+;;
+;; dunno if the loop is really needed, I think we can just assume
+;; the UUID is right after the src block
+(defun org-babel--previous-src-block-or-inline ()
   "Jump to previous source block or inline block."
-  (re-search-backward (rx (or (regexp org-babel-src-block-regexp)
-                              ;; copied from `org-element-inline-src-block-parser'.
-                              (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))))
+  (cl-loop while (and (not (org-element-type-p (org-element-context)
+                                               '(inline-src-block src-block)))
+                      (not (re-search-backward
+                            (rx (or (regexp org-babel-src-block-regexp)
+                                    ;; copied from `org-element-inline-src-block-parser'.
+                                    (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
+                            nil t)))))
 
 (defvar org-babel-load-languages)
 

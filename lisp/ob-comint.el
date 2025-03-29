@@ -313,7 +313,7 @@ STRING contains the output originally inserted into the comint buffer."
 			    (save-excursion
 			      (goto-char (point-min))
 			      (when (search-forward tmp-file nil t)
-                                (org-babel-previous-src-block-or-inline)
+                                (org-babel--previous-src-block-or-inline)
                                 (let* ((info (org-babel-get-src-block-info))
                                        (params (nth 2 info))
                                        (result-params
@@ -364,7 +364,7 @@ STRING contains the output originally inserted into the comint buffer."
 			       (save-excursion
 			         (goto-char (point-min))
 			         (when (search-forward uuid nil t)
-				   (org-babel-previous-src-block-or-inline)
+				   (org-babel--previous-src-block-or-inline)
                                    (let* ((info (org-babel-get-src-block-info))
                                           (params (nth 2 info))
                                           (result-params
@@ -375,6 +375,23 @@ STRING contains the output originally inserted into the comint buffer."
 				   t))))
 	      ;; Remove uuid from the list to search for
 	      (setq uuid-list (delete uuid uuid-list)))))))))
+
+(defun org-babel-comint-async--find-src (uuid-or-tmpfile)
+  "TODO
+Returns non-nil if src was found"
+  (goto-char (point-min))
+  (and (search-forward uuid-or-tmpfile nil t)
+       (re-search-backward
+        (rx (or (regexp org-babel-src-block-regexp)
+                ;; FIXME copied from `org-element-inline-src-block-parser'.
+                (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
+        nil t)
+       (org-element-type-p (org-element-context)
+                           '(inline-src-block src-block))
+       (org-babel-where-is-src-block-result)
+       ;; TODO verify the result is uuid-or-tmpfile
+       (let ((result (org-element-context))))
+       ))
 
 (defun org-babel-comint-async-register
     (session-buffer org-buffer indicator-regexp
