@@ -386,12 +386,17 @@ Returns non-nil if src was found"
                 ;; FIXME copied from `org-element-inline-src-block-parser'.
                 (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
         nil t)
-       (org-element-type-p (org-element-context)
-                           '(inline-src-block src-block))
-       (org-babel-where-is-src-block-result)
-       ;; TODO verify the result is uuid-or-tmpfile
-       (let ((result (org-element-context))))
-       ))
+       (save-excursion
+         (or (and (org-element-type-p (org-element-context) 'inline-src-block)
+                  (org-babel-where-is-src-block-result)
+                  (let ((result (org-element-context)))
+                    (and (org-element-type-p result 'macro)
+                         (equal (org-element-property :key result) "result")
+                         (equal (org-element-property :args result)
+                                (list (format org-babel-inline-result-wrap uuid-or-tmpfile))))))
+             (and (org-element-type-p (org-element-context) 'src-block)
+                  (org-babel-where-is-src-block-result)
+                  (equal (org-element-property :value (org-element-context)) uuid-or-tmpfile))))))
 
 (defun org-babel-comint-async-register
     (session-buffer org-buffer indicator-regexp
