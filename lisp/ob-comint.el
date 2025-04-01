@@ -380,23 +380,15 @@ STRING contains the output originally inserted into the comint buffer."
   "TODO
 Returns non-nil if src was found"
   (goto-char (point-min))
-  (and (search-forward uuid-or-tmpfile nil t)
-       (re-search-backward
-        (rx (or (regexp org-babel-src-block-regexp)
-                ;; FIXME copied from `org-element-inline-src-block-parser'.
-                (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
-        nil t)
-       (save-excursion
-         (or (and (org-element-type-p (org-element-context) 'inline-src-block)
-                  (org-babel-where-is-src-block-result)
-                  (let ((result (org-element-context)))
-                    (and (org-element-type-p result 'macro)
-                         (equal (org-element-property :key result) "result")
-                         (equal (org-element-property :args result)
-                                (list (format org-babel-inline-result-wrap uuid-or-tmpfile))))))
-             (and (org-element-type-p (org-element-context) 'src-block)
-                  (org-babel-where-is-src-block-result)
-                  (equal (org-element-property :value (org-element-context)) uuid-or-tmpfile))))))
+  (when (search-forward uuid-or-tmpfile nil t)
+    (let ((result-begin (org-element-property :begin (org-element-context))))
+      (and (re-search-backward
+            (rx (or (regexp org-babel-src-block-regexp)
+                    ;; FIXME copied from `org-element-inline-src-block-parser'.
+                    (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
+            nil t))
+      (org-element-type-p (org-element-context) '(inline-src-block src-block))
+      (eq (org-babel-where-is-src-block-result) result-begin))))
 
 (defun org-babel-comint-async-register
     (session-buffer org-buffer indicator-regexp
