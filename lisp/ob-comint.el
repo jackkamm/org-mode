@@ -312,8 +312,7 @@ STRING contains the output originally inserted into the comint buffer."
 		          (with-current-buffer buf
 			    (save-excursion
 			      (goto-char (point-min))
-			      (when (search-forward tmp-file nil t)
-                                (org-babel--previous-src-block-or-inline)
+			      (when (org-babel-comint-async--find-src tmp-file)
                                 (let* ((info (org-babel-get-src-block-info))
                                        (params (nth 2 info))
                                        (result-params
@@ -363,8 +362,7 @@ STRING contains the output originally inserted into the comint buffer."
 		       until (with-current-buffer buf
 			       (save-excursion
 			         (goto-char (point-min))
-			         (when (search-forward uuid nil t)
-				   (org-babel--previous-src-block-or-inline)
+			         (when (org-babel-comint-async--find-src uuid)
                                    (let* ((info (org-babel-get-src-block-info))
                                           (params (nth 2 info))
                                           (result-params
@@ -382,12 +380,13 @@ Returns non-nil if src was found"
   (goto-char (point-min))
   (when (search-forward uuid-or-tmpfile nil t)
     (let ((result-begin (org-element-property :begin (org-element-context))))
-      (and (re-search-backward
-            (rx (or (regexp org-babel-src-block-regexp)
-                    ;; FIXME copied from `org-element-inline-src-block-parser'.
-                    (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
-            nil t))
-      (org-element-type-p (org-element-context) '(inline-src-block src-block))
+      (cl-loop while (and (not (org-element-type-p (org-element-context)
+                                                   '(inline-src-block src-block)))
+                          (not (re-search-backward
+                                (rx (or (regexp org-babel-src-block-regexp)
+                                        ;; copied from `org-element-inline-src-block-parser'.
+                                        (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
+                                nil t))))
       (eq (org-babel-where-is-src-block-result) result-begin))))
 
 (defun org-babel-comint-async-register
