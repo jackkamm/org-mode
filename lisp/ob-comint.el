@@ -38,6 +38,9 @@
 (require 'org-compat)
 (require 'comint)
 
+(declare-function org-element-context "org-element" (&optional element))
+(defvar org-element-inline-src-block-regexp)
+
 (defun org-babel-comint-buffer-livep (buffer)
   "Check if BUFFER is a comint buffer with a live process."
   (let ((buffer (when buffer (get-buffer buffer))))
@@ -392,16 +395,15 @@ limitation of the current async implementation)."
       (and (re-search-backward
             ;; find the nearest preceding src or inline-src block
             (rx (or (regexp org-babel-src-block-regexp)
-                    ;; copied from `org-element-inline-src-block-parser'.
-                    (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
+                    (regexp org-element-inline-src-block-regexp)))
             nil t)
            ;; check it's actually a src block and not verbatim text
            (org-element-type-p (org-element-context)
                                '(inline-src-block src-block))
            ;; Check result contains the uuid. There isn't a simple way
            ;; to directly extract the result that works in all cases
-           ;; (e.g. inline blocks or results drawers), but it's easy
-           ;; to check result's position, so do that instead
+           ;; (e.g. inline blocks or results drawers), so instead
+           ;; check the result region contains the found uuid position
            (let ((result-where (org-babel-where-is-src-block-result)))
              (when result-where
                (save-excursion
