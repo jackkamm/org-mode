@@ -375,15 +375,17 @@ STRING contains the output originally inserted into the comint buffer."
 	      (setq uuid-list (delete uuid uuid-list)))))))))
 
 (defun org-babel-comint-async--find-src (uuid-or-tmpfile)
-  "Find src block to insert async result.
-UUID-OR-TMPFILE is the string to insert the result into.  If src block
-is found, moves point there and returns non-nil.
+  "Find source block associated with an async comint result.
+UUID-OR-TMPFILE is the uuid or tmpfile associated with the result.
+Returns non-nil if the source block is succesfully found, and moves
+point there.
 
-This function assumes that UUID-OR-TMPFILE was originally inserted into
-the src block's results via org-babel-execute:LANG.  Note that if the
-user has subsequently modified the results block or copied the string
-UUID-OR-TMPFILE elsewhere, the async evaluation may fail to find the src
-block and insert the result."
+This function assumes that UUID-OR-TMPFILE was previously inserted as
+the source block's result, as a placeholder until the true result
+becomes ready.  It may fail to find the source block if the buffer was
+modified so that UUID-OR-TMPFILE is no longer the result of the source
+block, or if it has been copied elsewhere into the buffer (this is a
+limitation of the current async implementation)."
   (goto-char (point-min))
   (when (search-forward uuid-or-tmpfile nil t)
     (let ((uuid-pos (point)))
@@ -396,10 +398,10 @@ block and insert the result."
            ;; check it's actually a src block and not verbatim text
            (org-element-type-p (org-element-context)
                                '(inline-src-block src-block))
-           ;; Check src block's result has the uuid. There isn't a
-           ;; simple way to extract the result value that works in all
-           ;; cases (e.g. inline blocks or results drawers), but it's
-           ;; easier to check result's position, so do that instead
+           ;; Check result contains the uuid. There isn't a simple way
+           ;; to directly extract the result that works in all cases
+           ;; (e.g. inline blocks or results drawers), but it's easy
+           ;; to check result's position, so do that instead
            (let ((result-where (org-babel-where-is-src-block-result)))
              (when result-where
                (save-excursion
