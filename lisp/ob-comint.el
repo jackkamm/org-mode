@@ -379,15 +379,27 @@ STRING contains the output originally inserted into the comint buffer."
 Returns non-nil if src was found"
   (goto-char (point-min))
   (when (search-forward uuid-or-tmpfile nil t)
-    (let ((result-begin (org-element-property :begin (org-element-context))))
-      (cl-loop while (and (not (org-element-type-p (org-element-context)
-                                                   '(inline-src-block src-block)))
-                          (not (re-search-backward
-                                (rx (or (regexp org-babel-src-block-regexp)
-                                        ;; copied from `org-element-inline-src-block-parser'.
-                                        (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
-                                nil t))))
-      (eq (org-babel-where-is-src-block-result) result-begin))))
+    (let ((uuid-pos (point)))
+      (and (re-search-backward
+            ;; find the nearest preceding src or inline-src block
+            (rx (or (regexp org-babel-src-block-regexp)
+                    ;; copied from `org-element-inline-src-block-parser'.
+                    (regexp "\\_<src_\\([^ \t\n[{]+\\)[{[]")))
+            nil t)
+           ;; check it's actually a src block and not verbatim text
+           (org-element-type-p (org-element-context)
+                               '(inline-src-block src-block))
+           ;; Check src block's result has the uuid. There isn't a
+           ;; simple way to extract the result value that works in all
+           ;; cases (e.g. inline blocks or results drawers), but it's
+           ;; easier to check result's position, so do that instead
+           (let ((result-where (org-babel-where-is-src-block-result)))
+             (when result-where
+               (save-excursion
+                 (goto-char result-where)
+                 (and
+                  (>= uuid-pos (org-element-property :begin (org-element-context)))
+                  (< uuid-pos (org-element-property :end (org-element-context)))))))))))
 
 (defun org-babel-comint-async-register
     (session-buffer org-buffer indicator-regexp
