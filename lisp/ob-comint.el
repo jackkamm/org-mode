@@ -375,8 +375,15 @@ STRING contains the output originally inserted into the comint buffer."
 	      (setq uuid-list (delete uuid uuid-list)))))))))
 
 (defun org-babel-comint-async--find-src (uuid-or-tmpfile)
-  "TODO
-Returns non-nil if src was found"
+  "Find src block to insert async result.
+UUID-OR-TMPFILE is the string to insert the result into.  If src block
+is found, moves point there and returns non-nil.
+
+This function assumes that UUID-OR-TMPFILE was originally inserted into
+the src block's results via org-babel-execute:LANG.  Note that if the
+user has subsequently modified the results block or copied the string
+UUID-OR-TMPFILE elsewhere, the async evaluation may fail to find the src
+block and insert the result."
   (goto-char (point-min))
   (when (search-forward uuid-or-tmpfile nil t)
     (let ((uuid-pos (point)))
